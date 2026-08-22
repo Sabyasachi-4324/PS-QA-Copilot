@@ -1,6 +1,6 @@
 import time
-from knowledge_base import retrieve_context
-from bug_generator import generate_structured_bug
+from backend.knowledge_base import retrieve_context
+from backend.bug_generator import generate_structured_bug
 
 def run_test():
     # Sample tester input (vague observation)

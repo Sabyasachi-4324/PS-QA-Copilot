@@ -1,5 +1,5 @@
 import os
-from knowledge_base import ingest_all_documents
+from backend.knowledge_base import ingest_all_documents
 
 # This forces Python to look in the exact same folder where this script lives
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
