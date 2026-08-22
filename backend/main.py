@@ -1,8 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from bug_generator import generate_structured_bug
-from clickup_client import create_task, upload_attachment, get_clickup_user_name
-from knowledge_base import retrieve_context, ingest_single_document
+from backend.bug_generator import generate_structured_bug
+from backend.clickup_client import create_task, upload_attachment, get_clickup_user_name
+from backend.knowledge_base import retrieve_context, ingest_single_document
 import uvicorn
 import os
 import re
