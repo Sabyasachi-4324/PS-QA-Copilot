@@ -1,0 +1,869 @@
+Treasure Road — QA Test Scenarios
+Feature Overview (User Perspective)
+
+A user joins the Treasure Road event, earns dice (ammo), rolls to move along a 99-tile board split into 3 laps,
+collects tile rewards along the way, claims milestone rewards at the end of each lap, and cashes out a Vault
+reward at the end. A Super Pass can be bought for bonus lap rewards.
+
+Journey 1: Event Entry & State Initialisation
+#
+1.1
+
+Scenario
+User opens the
+event for the first
+time
+
+Steps
+Open event
+screen midevent window
+
+1.2 User re-opens
+the event after
+closing the app
+
+Close and
+reopen app,
+navigate back to
+event
+First session,
+event is live
+
+1.3 User opens event
+on a brand new
+account
+1.4 User opens event
+after it has ended
+1.5 User opens a
+fresh event when
+one just ended
+
+Event window
+has expired
+New event starts
+after previous
+one
+
+Expected Result
+Board shown at tile 0, free
+dice in hand (40 ammo),
+Vault at 0, all 3 lap rewards
+locked
+Exact tile position, ammo
+count, and vault total are
+preserved
+
+Risk
+User sees a blank or broken
+board if initial state is not
+seeded correctly
+
+All values start at zero; free
+ammo granted; no lap
+rewards shown as claimed
+Event screen shows "event
+ended" or gracefully routes
+away; no actions possible
+Board resets to tile 0;
+previous pass, progress,
+and rewards cleared
+
+New user gets no ammo if
+initial grant fails silently
+
+Expected Result
+40 ammo shown in inventory
+
+Risk
+If Tesseract config fails to
+load, user gets 0 ammo and
+can't play
+
+Progress lost if server state
+not persisted before client
+sync
+
+User can still tap Roll if expiry
+check is only server-side;
+confusing UX
+Old Super Pass flag carries
+over, unlocking bonus
+rewards the user didn't pay
+for in the new event
+
+Journey 2: Ammo Acquisition
+2A — Free Starting Ammo
+#
+2.1
+
+about:blank
+
+Scenario
+User sees starting
+dice
+
+Steps
+Open event
+
+1/7
+
+17/07/2026, 13:10
+
+# Scenario
+2.2 User checks
+ammo after
+spending all
+
+Response
+
+Steps
+Roll dice until
+ammo depleted
+
+Expected Result
+Ammo shows 0; Roll button
+disabled or shows "not
+enough ammo"
+
+Risk
+Roll button remains
+tappable at 0 ammo,
+causing error loop
+
+Expected Result
+Ammo increases by
+tier reward (5–22
+units); box marked
+used
+2.4 User tries to watch
+Re-tap a used ad Box shows cooldown
+the same ad box again box
+timer (24 hours); no
+immediately
+reward given
+2.5 User watches all 4 ad Watch all 4 ads Each box gives
+boxes
+in sequence
+distinct reward; total
+ammo increases 4
+times
+2.6 User drops the ad
+Open ad, close No ammo granted; ad
+mid-watch
+before
+box still available
+completion
+2.7 User's ad cooldown
+Tap "Reset Ad
+All 4 boxes refilled
+expires — tries to
+Boxes"
+and available again
+reset
+
+Risk
+User watches full ad but
+ammo not credited (ad
+callback failure)
+
+2B — Ad Watch Ammo
+# Scenario
+2.3 User watches an ad
+for ammo
+
+Steps
+Tap ad box,
+watch ad to
+completion
+
+Box resets immediately due to
+clock or timezone mismatch,
+giving unlimited free ammo
+Some boxes share the same
+reward tier, causing
+duplicated or zero grants
+Ad considered "watched"
+even if dropped early, wasting
+the user's ad opportunity
+Reset called before cooldown
+completes due to client/server
+time drift
+
+2C — Paid Ammo (Event Sale)
+#
+2.8
+
+Scenario
+User purchases
+ammo pack
+User purchases
+ammo pack at
+discounted price
+
+Steps
+Tap buy button,
+confirm
+purchase
+Buy when
+discount is
+active
+
+Expected Result
+Payment charged; 300
+ammo added; balance
+updated on screen
+Charged discounted
+price; ammo still
+granted at full quantity
+
+2.9
+
+2.10 User attempts
+double-purchase
+quickly
+
+Tap buy twice in
+rapid
+succession
+
+Only one charge; one
+ammo pack credited
+
+Risk
+Ammo not added if purchase
+receipt validated but state
+update fails
+Discount applies but ammo
+quantity halved if price and
+quantity configs are
+mismatched
+Double charge with single
+ammo grant, or double ammo
+with single charge
+
+Journey 3: Dice Rolling & Board Progression
+about:blank
+
+2/7
+
+17/07/2026, 13:10
+
+#
+3.1
+
+Scenario
+User rolls dice with
+sufficient ammo
+
+3.2 User rolls and lands
+on a reward tile
+3.3 User rolls and lands
+on a non-reward
+tile
+3.4 User rolls dice
+exactly onto lap
+completion tile (tile
+33)
+3.5 User rolls past the
+lap boundary (e.g.
+at tile 31, rolls a 5)
+3.6 User rolls dice at
+tile 99 (final tile)
+3.7
+
+User rapidly taps
+Roll multiple times
+
+3.8 User rolls during
+network
+interruption
+
+Response
+
+Steps
+Tap Roll
+
+Roll and land on
+tiles 1, 3, 4, 6,
+etc.
+Roll and land on
+an empty tile
+
+Expected Result
+Dice animation plays; token
+moves by 1–6 tiles; 16
+ammo consumed; tile
+reward shown if applicable
+Reward popup appears
+(coins, gems, booster);
+reward added to Vault
+Token moves; no reward
+popup; Vault unchanged
+
+Roll enough to
+land precisely on
+tile 33
+
+Lap 1 complete animation
+plays; Lap 1 reward
+becomes claimable
+
+Roll 5 from tile
+31
+
+Token wraps to tile 3 on lap
+2; lap 1 marked complete;
+lap 2 begins
+Roll button disabled or
+shows "board complete";
+no ammo consumed
+Only one roll registers per
+tap; ammo consumed once
+
+Try to roll after
+reaching end of
+board
+Tap Roll button
+3–4 times
+quickly
+Roll with poor
+connectivity
+
+Risk
+Ammo deducted but
+progress not saved; user
+loses ammo with no
+movement
+Tile reward popup shown
+but reward not actually
+credited
+Reward popup appears for
+empty tiles due to off-byone in tile lookup
+Overshooting tile 33 skips
+the lap completion flag
+silently
+
+Either roll succeeds and
+syncs later, or roll fails
+cleanly with ammo
+refunded
+
+Progress arithmetic uses
+wrong modulus; user jumps
+to wrong tile
+Ammo still deducted but
+progress stays at 99; silent
+loss
+Multiple rolls trigger from a
+single interaction, draining
+ammo faster than intended
+Ammo deducted on client,
+roll fails on server — user
+loses ammo with no board
+movement
+
+Expected Result
+2-hour booster
+granted; Lap 1 shown
+as claimed
+50,000 coins granted;
+Lap 2 shown as
+claimed
+
+Risk
+Claim button active before lap
+is complete; reward granted
+early
+Previous lap not required
+before claiming next; user can
+skip
+
+Journey 4: Lap Milestone Rewards
+#
+4.1
+
+Scenario
+User claims free
+Lap 1 reward
+
+4.2 User claims free
+Lap 2 reward
+
+about:blank
+
+Steps
+Complete Lap 1, tap
+Claim on Lap 1
+reward
+Complete Lap 2,
+tap Claim
+
+3/7
+
+17/07/2026, 13:10
+
+# Scenario
+4.3 User claims free
+Lap 3 reward
+
+Response
+
+Steps
+Complete Lap 3,
+tap Claim
+
+4.4 User tries to claim Claim Lap 1, then
+a lap reward twice tap Claim again
+4.5 User with Super
+Pass claims
+bonus Lap 1
+reward
+4.6 User without
+Super Pass sees
+bonus lap
+rewards
+4.7 User claims all 6
+lap rewards (3
+free + 3 bonus)
+
+Purchase Super
+Pass, complete Lap
+1, tap Bonus Claim
+Open event without
+buying Super Pass
+Complete all laps
+with Super Pass
+
+Expected Result
+A card from the event
+pool granted; Lap 3
+shown as claimed
+Second claim rejected
+silently; no duplicate
+reward
+6-hour booster
+granted (3× free);
+bonus track shows
+claimed
+Bonus rewards visible
+but locked; tapping
+shows upsell or is
+disabled
+All 6 rewards claimed;
+no further lap claim
+buttons active
+
+Risk
+No eligible cards available but
+fallback gems (800) not
+triggered; user gets nothing
+Duplicate reward granted if
+claim flag not set before
+response is sent
+Bonus reward granted even
+without a Super Pass if flag
+check is skipped
+
+Expected Result
+Vault counter increases with
+each tile reward (multiplied
+by 10×)
+All accumulated rewards
+(coins, gems, boosters)
+delivered at once; Vault
+shown as empty
+Second claim rejected; no
+duplicate reward
+
+Risk
+Vault total not updating on
+screen even though server
+is accumulating it
+Vault claim fails silently;
+user sees success screen
+but inventory unchanged
+
+Tap on locked bonus reward
+triggers claim logic and errors
+out instead of showing
+purchase prompt
+Claim counter exceeds 3 due
+to integer overflow or repeated
+increments
+
+Journey 5: Vault Reward
+#
+5.1
+
+Scenario
+User accumulates
+vault rewards
+through rolling
+5.2 User claims vault at
+event end
+
+Steps
+Roll across
+multiple reward
+tiles
+Tap "Claim
+Vault" button
+
+5.3 User tries to claim
+vault twice
+
+Claim vault,
+then tap Claim
+again
+Claim vault
+before
+completing all
+laps
+Allow event to
+expire without
+claiming
+
+5.4 User claims vault
+mid-event
+5.5 User never claims
+vault before event
+ends
+about:blank
+
+Vault claimed for current
+balance; future tile rewards
+still accumulate (or don't —
+per design)
+Vault rewards expire with no
+way to recover
+
+Vault reward granted twice
+if claim flag not persisted
+before response
+UX doesn't communicate
+whether future rewards go
+to vault or not after
+claiming
+No expiry warning shown;
+user loses substantial
+accumulated rewards
+4/7
+
+17/07/2026, 13:10
+
+Response
+
+Journey 6: Super Pass Purchase
+#
+6.1
+
+Scenario
+User buys Super
+Pass before
+completing any lap
+6.2 User buys Super
+Pass after
+completing Lap 1
+
+Steps
+Purchase Super
+Pass at start
+
+6.3 User buys Super
+Pass after
+completing all 3
+laps
+6.4 User purchases
+Super Pass at a
+higher price tier
+
+Complete board,
+then purchase
+Super Pass
+
+6.5 User purchases
+Super Pass on a
+new event
+
+Event resets;
+previous pass
+not carried
+
+Complete Lap 1,
+then purchase
+Super Pass
+
+Expected Result
+Pass flag set; bonus lap
+rewards become available
+for all future lap completions
+Bonus Lap 1 reward
+immediately claimable
+All 3 bonus lap rewards
+become claimable
+simultaneously
+
+Buy a $15 or $18 Same pass benefits; price
+pack
+shown correctly before and
+after purchase
+New event requires new
+Super Pass; old bonus
+rewards not accessible
+
+Risk
+UI doesn't refresh after
+purchase; bonus rewards
+still appear locked
+Bonus Lap 1 reward locked
+because eligibility is only
+checked at lap completion
+time
+Only Lap 3 bonus unlocked;
+retroactive unlock logic
+broken for earlier laps
+Price override from
+Tesseract config not
+applied; user charged
+default rate
+Old pass flag carries into
+new event; user gets bonus
+rewards without paying for
+new event
+
+Journey 7: Edge Cases & Boundary Conditions
+#
+7.1
+
+Scenario
+User completes the
+board (tile 99) with
+ammo remaining
+
+Steps
+Reach tile 99;
+still have ammo
+
+7.2 User rolls exactly from
+tile 98 with a roll of 1
+
+Roll 1 from tile
+98
+
+Expected Result
+Board complete state
+shown; ammo
+preserved but Roll
+disabled
+Lands exactly on tile
+99; board completes
+
+7.3 User is on Lap 2 but
+hasn't claimed Lap 1
+reward
+
+Complete Lap 2
+without claiming
+Lap 1
+
+Both Lap 1 and Lap 2
+rewards claimable
+independently
+
+7.4 User's Tesseract
+cohort changes midevent
+
+Backend reassigns user to
+different cohort
+
+User continues with
+original event config
+
+about:blank
+
+Risk
+Remaining ammo lost
+silently; user feels cheated
+Landing exactly on 99 not
+recognised as complete;
+user stuck in limbo
+Lap 2 claim blocked until
+Lap 1 is claimed, even
+though there's no stated
+requirement
+Config changes mid-event
+causing tile rewards, ammo
+costs, or lap rewards to shift
+unexpectedly
+5/7
+
+17/07/2026, 13:10
+
+# Scenario
+7.5 User plays on two
+devices simultaneously
+7.6 Card Collection
+Revamp variant — user
+eligible for Ace card
+7.7
+
+Card Collection
+Revamp variant — user
+has no collection sets
+
+Response
+
+Steps
+Log in on Device
+A and Device B,
+roll on both
+Play with CC
+Revamp
+enabled; reach
+Lap 3
+Reach Lap 3
+with no card
+collections
+started
+
+Expected Result
+One roll accepted;
+other rejected or
+queued
+Ace card granted from
+best eligible collection
+set
+
+Risk
+Both rolls succeed; ammo
+deducted twice, progress
+advanced twice
+No eligible Ace cards exist
+but 800-gem fallback not
+triggered; user gets nothing
+
+800-gem fallback
+granted
+
+Fallback not triggered;
+empty reward with no
+feedback
+
+High-Risk Areas Summary
+Area
+Ammo deduction on failed roll
+
+Risk Level
+High
+
+Vault claim not persisted before
+response
+Super Pass flag carrying across
+events
+Tesseract config load failure
+Tile position boundary at lap
+transitions
+Ad cooldown using client time
+No vault expiry warning
+
+High
+
+Concern
+User loses currency with no board movement —
+invisible loss
+Duplicate vault claims possible on retry
+
+High
+
+User unlocks paid content without paying
+
+High
+Medium
+
+Double-tap on Roll or Claim
+Lap reward claiming in wrong order
+
+Medium
+Low–
+Medium
+
+Silent fallback to 0 ammo; user can't play at all
+Progress modulus errors cause wrong tile shown or lap
+skipped
+Cooldown bypassed by changing device time
+User loses significant accumulated rewards with no
+notification
+Duplicate actions processed before debounce kicks in
+Order dependencies not clearly communicated to user
+
+Medium
+Medium
+
+Scenario Coverage Summary
+Journey
+Event Entry
+about:blank
+
+Free User
+✅
+
+Super Pass User
+✅
+
+Edge/Error
+✅
+6/7
+
+17/07/2026, 13:10
+
+Journey
+Ammo — Free
+Ammo — Ads
+Ammo — Paid
+Dice Rolling
+Lap Rewards — Free
+Lap Rewards — Bonus
+Vault
+Super Pass Purchase
+Card Reward (Revamp)
+
+about:blank
+
+Response
+
+Free User
+✅
+✅
+—
+✅
+✅
+—
+✅
+—
+✅
+
+Super Pass User
+✅
+✅
+✅
+✅
+✅
+✅
+✅
+✅
+✅
+
+Edge/Error
+✅
+✅
+✅
+✅
+✅
+✅
+✅
+✅
+✅
+
+7/7
+
+
