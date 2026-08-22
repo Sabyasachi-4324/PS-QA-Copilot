@@ -3,6 +3,8 @@ import axios from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function App() {
   // =========================================================
   // WELCOME MODAL
@@ -44,7 +46,7 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userRes = await axios.get('http://localhost:8000/api/get-users');
+        const userRes = await axios.get(`${API_URL}/api/get-users`);
         if (userRes.data.status === 'success') {
           const fetchedUsers = userRes.data.users;
           setUsers(fetchedUsers);
@@ -57,7 +59,7 @@ function App() {
           }
         }
 
-        const ticketRes = await axios.get('http://localhost:8000/api/get-tickets');
+        const ticketRes = await axios.get(`${API_URL}/api/get-tickets`);
         if (ticketRes.data.status === 'success') {
           setAllTickets(ticketRes.data.tickets);
         }
@@ -86,7 +88,7 @@ function App() {
     formData.append('api_token', apiTokenInput.trim());
 
     try {
-      const res = await axios.post('http://localhost:8000/api/verify-token', formData);
+      const res = await axios.post(`${API_URL}/api/verify-token`, formData);
       if (res.data.status === 'success') {
         setPendingUser(res.data.username);
         setSettingsMessage('');
@@ -112,7 +114,7 @@ function App() {
     formData.append('username', pendingUser);
 
     try {
-      const res = await axios.post('http://localhost:8000/api/confirm-register-token', formData);
+      const res = await axios.post(`${API_URL}/api/confirm-register-token`, formData);
       if (res.data.status === 'success') {
         const newUsername = res.data.username;
         setSettingsMessage(`✅ Profile for "${newUsername}" successfully added to database and activated!`);
@@ -120,7 +122,7 @@ function App() {
         setPendingUser(null);
 
         // Refresh user list from database
-        const userRes = await axios.get('http://localhost:8000/api/get-users');
+        const userRes = await axios.get(`${API_URL}/api/get-users`);
         if (userRes.data.status === 'success') {
           const updatedUsers = userRes.data.users;
           setUsers(updatedUsers);
@@ -222,7 +224,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/generate-bug',
+        `${API_URL}/api/generate-bug`,
         formData
       );
 
@@ -270,7 +272,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/create-ticket',
+        `${API_URL}/api/create-ticket`,
         formData,
         {
           headers: {
@@ -322,7 +324,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/upload-rulebook',
+        `${API_URL}/api/upload-rulebook`,
         formData,
         {
           headers: {
@@ -375,7 +377,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/bulk-upload-bugs',
+        `${API_URL}/api/bulk-upload-bugs`,
         formData
       );
 
