@@ -2165,8 +2165,8 @@ function App() {
                       <tr key={idx}>
                         <td className="p-3 text-light text-truncate" style={{ maxWidth: '300px' }}>{t.summary}</td>
                         <td className="p-3"><span className={`badge ${['P0', 'P1'].includes(t.priority) ? 'bg-danger' : 'bg-secondary'}`}>{t.priority}</span></td>
-                        <td className="p-3 text-muted">👤 {t.created_by}</td>
-                        <td className="p-3 text-muted" style={{ fontSize: '0.85rem' }}>{t.timestamp}</td>
+                        <td className="p-3 text-light">👤 {t.created_by}</td>
+                        <td className="p-3 text-light" style={{ fontSize: '0.85rem' }}>{t.timestamp}</td>
                         <td className="p-3">
                           {t.url ? <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-primary">Open ↗</a> : '—'}
                         </td>
