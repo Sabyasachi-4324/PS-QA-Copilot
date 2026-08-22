@@ -1,9 +1,9 @@
 import os
+import uuid
 
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
@@ -32,10 +32,30 @@ if INDEX_NAME not in pc.list_indexes().names():
         )
     )
 
+index = pc.Index(INDEX_NAME)
+
 embeddings = GoogleGenerativeAIEmbeddings(
     model="models/gemini-embedding-001",
     google_api_key=GOOGLE_API_KEY
 )
+
+
+def _upsert_chunks(chunks):
+    """Embeds and upserts a list of LangChain Document chunks directly via the Pinecone SDK."""
+    texts = [chunk.page_content for chunk in chunks]
+    vectors_embedded = embeddings.embed_documents(texts)
+
+    to_upsert = []
+    for chunk, vector in zip(chunks, vectors_embedded):
+        vec_id = str(uuid.uuid4())
+        metadata = dict(chunk.metadata) if chunk.metadata else {}
+        metadata["text"] = chunk.page_content
+        to_upsert.append((vec_id, vector, metadata))
+
+    # Pinecone upsert works fine in batches of 100
+    batch_size = 100
+    for i in range(0, len(to_upsert), batch_size):
+        index.upsert(vectors=to_upsert[i:i + batch_size])
 
 
 def ingest_all_documents(docs_folder: str = "docs"):
@@ -82,27 +102,31 @@ def ingest_all_documents(docs_folder: str = "docs"):
         "to Pinecone Cloud..."
     )
 
-    PineconeVectorStore.from_documents(
-        chunks,
-        embeddings,
-        index_name=INDEX_NAME
-    )
+    _upsert_chunks(chunks)
 
     print("Cloud Database successfully built!")
 
 
 def retrieve_context(query: str) -> str:
     """Searches the Pinecone database for matching rules."""
-    vectorstore = PineconeVectorStore(
-        index_name=INDEX_NAME,
-        embedding=embeddings
+    query_vector = embeddings.embed_query(query)
+
+    results = index.query(
+        vector=query_vector,
+        top_k=3,
+        include_metadata=True
     )
 
-    results = vectorstore.similarity_search(query, k=3)
+    matches = results.get("matches", []) if isinstance(results, dict) else results.matches
 
-    return "\n\n".join(
-        [doc.page_content for doc in results]
-    )
+    texts = []
+    for match in matches:
+        metadata = match["metadata"] if isinstance(match, dict) else match.metadata
+        text = metadata.get("text", "") if metadata else ""
+        if text:
+            texts.append(text)
+
+    return "\n\n".join(texts)
 
 
 def ingest_single_document(file_path: str):
@@ -132,11 +156,7 @@ def ingest_single_document(file_path: str):
         f"--- Uploading {len(chunks)} chunks to Pinecone..."
     )
 
-    PineconeVectorStore.from_documents(
-        chunks,
-        embeddings,
-        index_name=INDEX_NAME
-    )
+    _upsert_chunks(chunks)
 
     print("--- Success! New rules added to the AI brain.")
 
