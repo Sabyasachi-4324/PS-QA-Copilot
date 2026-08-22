@@ -6,3 +6,4 @@ google-generativeai
 pinecone-client
 pydantic
 langchain-google-genai
+langchain-community
