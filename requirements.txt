@@ -10,3 +10,5 @@ langchain-text-splitters
 pinecone
 pypdf
 google-generativeai
+python-dotenv
+slack_bolt

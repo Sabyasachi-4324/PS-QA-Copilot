@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 import uuid
 
@@ -15,11 +18,14 @@ if not PINECONE_API_KEY:
 if not GOOGLE_API_KEY:
     raise RuntimeError("GOOGLE_API_KEY environment variable is not set")
 
-INDEX_NAME = "qa-copilot-rules"
+# --- ENVIRONMENT CONFIGURATIONS ---
+INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "qa-copilot-rules")
+EMBEDDING_DIMENSION = int(os.getenv("PINECONE_EMBEDDING_DIMENSION", "3072"))
+EMBEDDING_MODEL = os.getenv("GOOGLE_EMBEDDING_MODEL", "models/gemini-embedding-001")
+PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws")
+PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
 
 pc = Pinecone(api_key=PINECONE_API_KEY)
-
-EMBEDDING_DIMENSION = 3072
 
 if INDEX_NAME not in pc.list_indexes().names():
     pc.create_index(
@@ -27,15 +33,15 @@ if INDEX_NAME not in pc.list_indexes().names():
         dimension=EMBEDDING_DIMENSION,
         metric="cosine",
         spec=ServerlessSpec(
-            cloud="aws",
-            region="us-east-1"
+            cloud=PINECONE_CLOUD,
+            region=PINECONE_REGION
         )
     )
 
 index = pc.Index(INDEX_NAME)
 
 embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001",
+    model=EMBEDDING_MODEL,
     google_api_key=GOOGLE_API_KEY
 )
 

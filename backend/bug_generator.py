@@ -1,9 +1,12 @@
 import json
 import re
 import os
+from dotenv import load_dotenv  # 👈 1. Add this import
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from backend.knowledge_base import retrieve_context
+from knowledge_base import retrieve_context
+
+load_dotenv()
 
 llm = ChatGoogleGenerativeAI(
     model=os.getenv("GOOGLE_MODEL", "gemini-3.6-flash"),

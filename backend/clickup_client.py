@@ -1,18 +1,29 @@
 import requests
 import os
+import datetime
+import json
+from dotenv import load_dotenv
 
-CLICKUP_API_TOKEN = "pk_234003367_8A6Q7Q4QUWNGJGWNWIDQKL96RLFO0R9J" # Keep your real token
+load_dotenv()
 
-# 🎯 MAP YOUR LIST IDs HERE
+CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
+
 LIST_IDS = {
-    "prod": "901616434578",       # Your current Prod Bugs list
-    "feature": "901616434600"   # Paste your Feature Bugs List ID here!
+    "prod": os.getenv("CLICKUP_PROD_LIST_ID"),       
+    "feature": os.getenv("CLICKUP_FEATURE_LIST_ID")
 }
 
 HEADERS = {
     "Authorization": CLICKUP_API_TOKEN,
     "Content-Type": "application/json"
 }
+
+# --- GLOBAL CONFIG & MAPS FROM .ENV ---
+PRIORITY_FIELD_ID = os.getenv("CLICKUP_PRIORITY_FIELD_ID")
+REPRO_RATE_FIELD_ID = os.getenv("CLICKUP_REPRO_FIELD_ID")
+
+priority_options_map = json.loads(os.getenv("CLICKUP_PRIORITY_MAP"))
+repro_options_map = json.loads(os.getenv("CLICKUP_REPRO_MAP"))
 
 def get_clickup_user_name(api_token: str):
     """Verifies token with ClickUp and fetches the user's username."""
@@ -33,34 +44,12 @@ def create_task(summary: str, description: str, priority_val: str, repro_val: st
     token_to_use = api_token if api_token else CLICKUP_API_TOKEN
     print(f"Creating ClickUp ticket: {summary} in {bug_type} list")
     
-    # Dynamically grab the correct List ID based on frontend selection
     target_list_id = LIST_IDS.get(bug_type, LIST_IDS["prod"])
     url = f"https://api.clickup.com/api/v2/list/{target_list_id}/task"
     
     headers = {
         "Authorization": token_to_use,
         "Content-Type": "application/json"
-    }
-    
-    PRIORITY_FIELD_ID = "7d9cb5e0-3548-45b4-9209-df67e4bfc8fe"
-    REPRO_RATE_FIELD_ID = "41784910-a5b0-4f89-b962-94eb02f36423"
-
-    priority_options_map = {
-        "P0": "ba9e5d9d-851c-4fd7-b177-13f8ee04a404", 
-        "P1": "fb4f7879-4c4c-4b05-9ab1-1f4114163164", 
-        "P2": "a48d3123-f690-48e1-a31a-e33a8b8dd872", 
-        "P3": "556ac02e-59dd-458e-b4a8-232011434b7d", 
-        "P4": "062afc35-1778-4563-be6e-75e3a5cdf955", 
-        "P5": "185acd48-acf4-4b69-8630-b9c850ae31bd"
-    }
-    
-    repro_options_map = {
-        "100%": "3a5d40a2-4ca2-49a3-9d47-ae3b230ce914", 
-        "75%": "1ad119c0-445e-4471-ab41-02bb08ddeee6", 
-        "50%": "c5bf9a23-a073-4958-813c-1a9ba5ee0201", 
-        "25%": "18961856-2a9f-456b-b58f-d804d10d520b", 
-        "10%": "334042ea-bf5c-470b-90d6-5b3fe8cbec0d", 
-        "Once": "d1b513ea-592a-42b8-a87f-29524cf7c755"
     }
 
     custom_fields = []
@@ -74,7 +63,8 @@ def create_task(summary: str, description: str, priority_val: str, repro_val: st
     payload = {
         "name": summary,
         "markdown_description": description,
-        "custom_fields": custom_fields
+        "custom_fields": custom_fields,
+        "tags": ["ai-copilot"]
     }
 
     response = requests.post(url, json=payload, headers=headers)
@@ -99,3 +89,48 @@ def upload_attachment(task_id: str, file_path: str, api_token: str = None):
         response = requests.post(url, headers=headers, files=files)
         
     return response.status_code == 200
+
+def get_ai_tickets_from_clickup(api_token: str = None):
+    """Fetches all tasks live from ClickUp lists that have the 'ai-copilot' tag for synchronized dashboard metrics."""
+    token_to_use = api_token if api_token else CLICKUP_API_TOKEN
+    headers = {"Authorization": token_to_use}
+    ai_tickets = []
+
+    # Dynamically generates the reverse map (ID -> Label) from your environment variable
+    id_to_priority = {v: k for k, v in priority_options_map.items()}
+
+    for bug_type, list_id in LIST_IDS.items():
+        url = f"https://api.clickup.com/api/v2/list/{list_id}/task?include_closed=true"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            tasks = response.json().get("tasks", [])
+            for task in tasks:
+                tags = [t.get("name", "").lower() for t in task.get("tags", [])]
+                if "ai-copilot" in tags:
+                    created_ms = task.get("date_created")
+                    timestamp = "N/A"
+                    if created_ms:
+                        try:
+                            timestamp = datetime.datetime.fromtimestamp(int(created_ms) / 1000).strftime("%Y-%m-%d %H:%M")
+                        except Exception:
+                            pass
+                    
+                    priority = "P2"
+                    for cf in task.get("custom_fields", []):
+                        if cf.get("id") == PRIORITY_FIELD_ID:
+                            val = cf.get("value")
+                            if val in id_to_priority:
+                                priority = id_to_priority[val]
+                            break
+
+                    ai_tickets.append({
+                        "summary": task.get("name"),
+                        "priority": priority,
+                        "bug_type": bug_type,
+                        "created_by": "AI Copilot",
+                        "url": task.get("url"),
+                        "timestamp": timestamp
+                    })
+    
+    ai_tickets.sort(key=lambda x: x["timestamp"], reverse=True)
+    return ai_tickets

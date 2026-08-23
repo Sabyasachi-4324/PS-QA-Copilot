@@ -1,8 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from backend.bug_generator import generate_structured_bug
-from backend.clickup_client import create_task, upload_attachment, get_clickup_user_name
-from backend.knowledge_base import retrieve_context, ingest_single_document
+from bug_generator import generate_structured_bug
+from clickup_client import create_task, upload_attachment, get_clickup_user_name, get_ai_tickets_from_clickup
+from knowledge_base import ingest_single_document
 import uvicorn
 import os
 import re
@@ -11,7 +14,11 @@ import io
 import json
 import datetime
 
-app = FastAPI(title="AI QA Copilot API")
+USER_DB_FILE = os.getenv("USER_DB_FILE", "users_db.json")
+TICKET_DB_FILE = os.getenv("TICKET_DB_FILE", "tickets_db.json")
+FASTAPI_TITLE = os.getenv("FASTAPI_TITLE", "PS QA Copilot API")
+
+app = FastAPI(title=FASTAPI_TITLE)
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,9 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-USER_DB_FILE = "users_db.json"
-TICKET_DB_FILE = "tickets_db.json"
 
 def load_users():
     """Loads registered users and tokens from persistent JSON storage."""
@@ -121,9 +125,17 @@ async def get_users():
 
 @app.get("/api/get-tickets")
 async def get_tickets():
-    """Returns all created ticket history for Dashboard and My Tickets."""
-    tickets = load_tickets()
-    return {"status": "success", "tickets": tickets}
+    """Returns real-time AI-created ticket history and count directly from ClickUp using the 'ai-copilot' tag."""
+    try:
+        tickets = get_ai_tickets_from_clickup()
+        return {
+            "status": "success",
+            "total_count": len(tickets),
+            "tickets": tickets
+        }
+    except Exception as e:
+        print(f"Error fetching live tickets from ClickUp: {e}")
+        return {"status": "error", "total_count": 0, "tickets": []}
 
 @app.post("/api/generate-bug")
 async def generate_bug_report(description: str = Form(...)):
@@ -190,7 +202,6 @@ async def create_clickup_ticket(
         if os.path.exists(file_location):
             os.remove(file_location)
 
-    # Save to persistent ticket history
     ticket_record = {
         "summary": summary,
         "priority": priority,
@@ -276,4 +287,7 @@ async def bulk_upload_bugs(
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 8000))
+    reload = os.getenv("RELOAD", "True").lower() == "true"
+    uvicorn.run("main:app", host=host, port=port, reload=reload)
