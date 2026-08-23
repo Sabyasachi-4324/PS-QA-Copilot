@@ -1,18 +1,21 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.middleware.cors import CORSMiddleware
-from bug_generator import generate_structured_bug
-from clickup_client import create_task, upload_attachment, get_clickup_user_name, get_ai_tickets_from_clickup
-from knowledge_base import ingest_single_document
-import uvicorn
 import os
+import json
+import datetime
 import re
 import csv
 import io
-import json
-import datetime
+import uvicorn
+from dotenv import load_dotenv
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+
+# Use relative imports for package compatibility on Render
+from .bug_generator import generate_structured_bug
+from .clickup_client import create_task, upload_attachment, get_clickup_user_name, get_ai_tickets_from_clickup
+from .knowledge_base import ingest_single_document
+from .slack_bot import router as slack_router
+
+load_dotenv()
 
 USER_DB_FILE = os.getenv("USER_DB_FILE", "users_db.json")
 TICKET_DB_FILE = os.getenv("TICKET_DB_FILE", "tickets_db.json")
@@ -27,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include the Slack bot routes seamlessly into the main app
+app.include_router(slack_router)
 
 def load_users():
     """Loads registered users and tokens from persistent JSON storage."""

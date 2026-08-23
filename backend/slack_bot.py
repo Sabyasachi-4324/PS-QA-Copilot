@@ -5,16 +5,15 @@ import re
 import requests
 import threading
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, Request
 from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 
 # Load environment variables from your root .env file
 load_dotenv()
 
-# Import core functions from main.py and bug_generator
-from bug_generator import generate_structured_bug
-from main import create_task, upload_attachment, load_users
+# Import core bug generator safely
+from .bug_generator import generate_structured_bug
 
 # Initialize Slack App using both Bot Token and Signing Secret
 app = App(
@@ -22,9 +21,8 @@ app = App(
     signing_secret=os.getenv("SLACK_SIGNING_SECRET")
 )
 
-# Initialize FastAPI app for Render HTTP hosting
-api_app = FastAPI()
 handler = SlackRequestHandler(app)
+router = APIRouter()
 
 TICKET_DB_FILE = os.getenv("TICKET_DB_FILE", "tickets_db.json")
 
@@ -72,7 +70,7 @@ def format_markdown_description(bug_data: dict) -> str:
 def handle_app_home_opened(client, event):
     pass
 
-# 1. Listen for the /qabug slash command in Slack (With Threading Fix)
+# 1. Listen for the /qabug slash command in Slack
 @app.command("/qabug")
 def handle_qabug_command(ack, body, client):
     ack() # Acknowledge command instantly to Slack to prevent 3-second timeout
@@ -230,6 +228,9 @@ def handle_qabug_command(ack, body, client):
 def handle_modal_submission(ack, body, client):
     ack() # Close modal successfully
     
+    # Local imports to prevent circular import issues with main.py
+    from .main import create_task, upload_attachment, load_users
+
     state = body["view"]["state"]["values"]
     summary = state["summary_block"]["summary_action"]["value"]
     priority = state["priority_block"]["priority_action"]["selected_option"]["value"]
@@ -324,13 +325,7 @@ def handle_modal_submission(ack, body, client):
             except Exception as e:
                 print(f"Failed to send Slack acknowledgement message: {e}")
 
-# --- FASTAPI WEB ENDPOINT FOR RENDER ---
-@api_app.post("/slack/events")
+# --- FASTAPI ROUTER ENDPOINT FOR MAIN APP ---
+@router.post("/slack/events")
 async def slack_endpoint(req: Request):
     return await handler.handle(req)
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    print(f"Slack AI Copilot Bot is running on port {port}...")
-    uvicorn.run("slack_bot:api_app", host="0.0.0.0", port=port)
