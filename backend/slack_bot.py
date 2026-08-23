@@ -329,4 +329,11 @@ def handle_modal_submission(ack, body, client):
 # --- FASTAPI ROUTER ENDPOINT FOR MAIN APP ---
 @router.post("/slack/events")
 async def slack_endpoint(req: Request):
-    return await handler.handle(req)
+    try:
+        return await handler.handle(req)
+    except json.JSONDecodeError:
+        # Silently catch malformed data or random web crawler pings
+        return {"status": "error", "message": "Invalid JSON payload"}
+    except Exception as e:
+        print(f"Error handling Slack event: {e}")
+        return {"status": "error", "message": str(e)}
