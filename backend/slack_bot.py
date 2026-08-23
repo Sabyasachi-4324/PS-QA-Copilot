@@ -3,9 +3,11 @@ import json
 import datetime
 import re
 import requests
+import threading
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request
 from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
+from slack_bolt.adapter.fastapi import SlackRequestHandler
 
 # Load environment variables from your root .env file
 load_dotenv()
@@ -14,8 +16,15 @@ load_dotenv()
 from bug_generator import generate_structured_bug
 from main import create_task, upload_attachment, load_users
 
-# Initialize Slack App using your Bot Token from the .env file
-app = App(token=os.getenv("SLACK_BOT_TOKEN"))
+# Initialize Slack App using both Bot Token and Signing Secret
+app = App(
+    token=os.getenv("SLACK_BOT_TOKEN"),
+    signing_secret=os.getenv("SLACK_SIGNING_SECRET")
+)
+
+# Initialize FastAPI app for Render HTTP hosting
+api_app = FastAPI()
+handler = SlackRequestHandler(app)
 
 TICKET_DB_FILE = os.getenv("TICKET_DB_FILE", "tickets_db.json")
 
@@ -63,153 +72,158 @@ def format_markdown_description(bug_data: dict) -> str:
 def handle_app_home_opened(client, event):
     pass
 
-# 1. Listen for the /qabug slash command in Slack
+# 1. Listen for the /qabug slash command in Slack (With Threading Fix)
 @app.command("/qabug")
 def handle_qabug_command(ack, body, client):
-    ack() # Acknowledge command instantly to Slack
+    ack() # Acknowledge command instantly to Slack to prevent 3-second timeout
     
     trigger_id = body["trigger_id"]
     user_text = body.get("text", "").strip()
     channel_id = body["channel_id"]
     thread_ts = body.get("thread_ts")
+    user_id = body["user_id"]
 
     if not user_text:
         client.chat_postEphemeral(
             channel=channel_id,
-            user=body["user_id"],
+            user=user_id,
             text="❌ Please provide a bug description. Example: `/qabug App crashes when clicking inventory`"
         )
         return
 
-    # STEP A: Open initial loading modal
-    loading_view = {
-        "type": "modal",
-        "callback_id": "bug_edit_modal",
-        "title": {"type": "plain_text", "text": "AI Bug Copilot"},
-        "close": {"type": "plain_text", "text": "Cancel"},
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "🤖 *Analyzing bug observation & querying knowledge base...* Please wait."
-                }
-            }
-        ]
-    }
-
-    try:
-        response = client.views_open(trigger_id=trigger_id, view=loading_view)
-        view_id = response["view"]["id"]
-    except Exception as e:
-        print(f"Error opening loading modal: {e}")
-        return
-
-    # STEP B: Run RAG pipeline safely with Quota/Rate Limit handling
-    try:
-        bug_data = generate_structured_bug(user_text)
-    except Exception as ai_error:
-        print(f"AI Generation Error (Likely Rate Limit): {ai_error}")
-        error_view = {
+    def process_ai_bug():
+        # STEP A: Open initial loading modal
+        loading_view = {
             "type": "modal",
             "callback_id": "bug_edit_modal",
-            "title": {"type": "plain_text", "text": "API Quota Exceeded"},
-            "close": {"type": "plain_text", "text": "Close"},
+            "title": {"type": "plain_text", "text": "AI Bug Copilot"},
+            "close": {"type": "plain_text", "text": "Cancel"},
             "blocks": [
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "⚠️ *Gemini API Free Tier Quota Exceeded*\n\nYou have reached the maximum number of free requests for today. Please wait for your quota to reset or upgrade your Google AI Studio plan."
+                        "text": "🤖 *Analyzing bug observation & querying knowledge base...* Please wait."
                     }
                 }
             ]
         }
+
         try:
-            client.views_update(view_id=view_id, view=error_view)
-        except Exception:
-            pass
-        return
+            response = client.views_open(trigger_id=trigger_id, view=loading_view)
+            view_id = response["view"]["id"]
+        except Exception as e:
+            print(f"Error opening loading modal: {e}")
+            return
 
-    summary = bug_data.get("summary") or "Slack Bug Report"
-    ai_priority = bug_data.get("priority", "P2").upper()
-    formatted_desc = format_markdown_description(bug_data)
-
-    priority_options = [
-        {"text": {"type": "plain_text", "text": "P1 - Critical"}, "value": "P1"},
-        {"text": {"type": "plain_text", "text": "P2 - High"}, "value": "P2"},
-        {"text": {"type": "plain_text", "text": "P3 - Medium"}, "value": "P3"},
-        {"text": {"type": "plain_text", "text": "P4 - Low"}, "value": "P4"},
-        {"text": {"type": "plain_text", "text": "P5 - Lowest"}, "value": "P5"}
-    ]
-    initial_priority = ai_priority if any(o["value"] == ai_priority for o in priority_options) else "P2"
-    initial_priority_opt = next(o for o in priority_options if o["value"] == initial_priority)
-
-    metadata_payload = json.dumps({
-        "channel_id": channel_id,
-        "thread_ts": thread_ts
-    })
-
-    # STEP C: Update modal with clean UI
-    final_modal_view = {
-        "type": "modal",
-        "callback_id": "bug_edit_modal",
-        "private_metadata": metadata_payload,
-        "title": {"type": "plain_text", "text": "Review & Edit AI Bug"},
-        "submit": {"type": "plain_text", "text": "Approve & Create"},
-        "close": {"type": "plain_text", "text": "Cancel"},
-        "blocks": [
-            {
-                "type": "input",
-                "block_id": "summary_block",
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": "summary_action",
-                    "initial_value": summary
-                },
-                "label": {"type": "plain_text", "text": "Ticket Summary (Title)"}
-            },
-            {
-                "type": "input",
-                "block_id": "priority_block",
-                "element": {
-                    "type": "static_select",
-                    "action_id": "priority_action",
-                    "placeholder": {"type": "plain_text", "text": "Select Priority"},
-                    "initial_option": initial_priority_opt,
-                    "options": priority_options
-                },
-                "label": {"type": "plain_text", "text": "Priority Level"}
-            },
-            {
-                "type": "input",
-                "block_id": "desc_block",
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": "desc_action",
-                    "multiline": True,
-                    "initial_value": formatted_desc
-                },
-                "label": {"type": "plain_text", "text": "Structured Description"}
-            },
-            {
-                "type": "input",
-                "block_id": "file_block",
-                "optional": True,
-                "element": {
-                    "type": "file_input",
-                    "action_id": "file_action",
-                    "max_files": 3
-                },
-                "label": {"type": "plain_text", "text": "Attach Evidence (Optional Screenshots/Videos)"}
+        # STEP B: Run RAG pipeline safely with Quota/Rate Limit handling
+        try:
+            bug_data = generate_structured_bug(user_text)
+        except Exception as ai_error:
+            print(f"AI Generation Error (Likely Rate Limit): {ai_error}")
+            error_view = {
+                "type": "modal",
+                "callback_id": "bug_edit_modal",
+                "title": {"type": "plain_text", "text": "API Quota Exceeded"},
+                "close": {"type": "plain_text", "text": "Close"},
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "⚠️ *Gemini API Free Tier Quota Exceeded*\n\nYou have reached the maximum number of free requests for today. Please wait for your quota to reset or upgrade your Google AI Studio plan."
+                        }
+                    }
+                ]
             }
-        ]
-    }
+            try:
+                client.views_update(view_id=view_id, view=error_view)
+            except Exception:
+                pass
+            return
 
-    try:
-        client.views_update(view_id=view_id, view=final_modal_view)
-    except Exception as e:
-        print(f"Could not update modal: {e}")
+        summary = bug_data.get("summary") or "Slack Bug Report"
+        ai_priority = bug_data.get("priority", "P2").upper()
+        formatted_desc = format_markdown_description(bug_data)
+
+        priority_options = [
+            {"text": {"type": "plain_text", "text": "P1 - Critical"}, "value": "P1"},
+            {"text": {"type": "plain_text", "text": "P2 - High"}, "value": "P2"},
+            {"text": {"type": "plain_text", "text": "P3 - Medium"}, "value": "P3"},
+            {"text": {"type": "plain_text", "text": "P4 - Low"}, "value": "P4"},
+            {"text": {"type": "plain_text", "text": "P5 - Lowest"}, "value": "P5"}
+        ]
+        initial_priority = ai_priority if any(o["value"] == ai_priority for o in priority_options) else "P2"
+        initial_priority_opt = next(o for o in priority_options if o["value"] == initial_priority)
+
+        metadata_payload = json.dumps({
+            "channel_id": channel_id,
+            "thread_ts": thread_ts
+        })
+
+        # STEP C: Update modal with clean UI
+        final_modal_view = {
+            "type": "modal",
+            "callback_id": "bug_edit_modal",
+            "private_metadata": metadata_payload,
+            "title": {"type": "plain_text", "text": "Review & Edit AI Bug"},
+            "submit": {"type": "plain_text", "text": "Approve & Create"},
+            "close": {"type": "plain_text", "text": "Cancel"},
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "summary_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "summary_action",
+                        "initial_value": summary
+                    },
+                    "label": {"type": "plain_text", "text": "Ticket Summary (Title)"}
+                },
+                {
+                    "type": "input",
+                    "block_id": "priority_block",
+                    "element": {
+                        "type": "static_select",
+                        "action_id": "priority_action",
+                        "placeholder": {"type": "plain_text", "text": "Select Priority"},
+                        "initial_option": initial_priority_opt,
+                        "options": priority_options
+                    },
+                    "label": {"type": "plain_text", "text": "Priority Level"}
+                },
+                {
+                    "type": "input",
+                    "block_id": "desc_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "desc_action",
+                        "multiline": True,
+                        "initial_value": formatted_desc
+                    },
+                    "label": {"type": "plain_text", "text": "Structured Description"}
+                },
+                {
+                    "type": "input",
+                    "block_id": "file_block",
+                    "optional": True,
+                    "element": {
+                        "type": "file_input",
+                        "action_id": "file_action",
+                        "max_files": 3
+                    },
+                    "label": {"type": "plain_text", "text": "Attach Evidence (Optional Screenshots/Videos)"}
+                }
+            ]
+        }
+
+        try:
+            client.views_update(view_id=view_id, view=final_modal_view)
+        except Exception as e:
+            print(f"Could not update modal: {e}")
+
+    # Start execution in a background thread so the HTTP connection returns immediately
+    threading.Thread(target=process_ai_bug).start()
 
 # 2. Handle modal submission when user clicks "Approve & Create"
 @app.view("bug_edit_modal")
@@ -308,10 +322,15 @@ def handle_modal_submission(ack, body, client):
                     text=f"🎉 *Bug Ticket Successfully Created!*\n• *Priority:* `{priority}` | *Environment:* `prod` | *Repro:* `100%`\n*<{ticket_url}|{summary}>*\n> *Reporter:* `👤 {user_name}`"
                 )
             except Exception as e:
-                print(f"Failed to send Slack acknowledgement message (Ensure bot is invited to channel): {e}")
+                print(f"Failed to send Slack acknowledgement message: {e}")
+
+# --- FASTAPI WEB ENDPOINT FOR RENDER ---
+@api_app.post("/slack/events")
+async def slack_endpoint(req: Request):
+    return await handler.handle(req)
 
 if __name__ == "__main__":
-    app_level_token = os.getenv("SLACK_APP_TOKEN")
-    print(" Slack AI Copilot Bot is running via Socket Mode...")
-    handler = SocketModeHandler(app, app_level_token)
-    handler.start()
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    print(f"Slack AI Copilot Bot is running on port {port}...")
+    uvicorn.run("slack_bot:api_app", host="0.0.0.0", port=port)
