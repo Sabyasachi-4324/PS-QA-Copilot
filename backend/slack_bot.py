@@ -229,7 +229,8 @@ def handle_modal_submission(ack, body, client):
     ack() # Close modal successfully
     
     # Local imports to prevent circular import issues with main.py
-    from .main import create_task, upload_attachment, load_users
+    from .main import load_users
+    from .clickup_client import create_task, upload_attachment
 
     state = body["view"]["state"]["values"]
     summary = state["summary_block"]["summary_action"]["value"]
