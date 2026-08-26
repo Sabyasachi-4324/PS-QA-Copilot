@@ -47,29 +47,45 @@ def get_clickup_user_name(api_token: str):
         return {"success": False, "message": "Invalid API Token"}
 
 def get_list_assignees(list_id: str = None, api_token: str = None):
-    """Fetches assignees directly from the specified ClickUp List ID."""
+    """Harvests unique assignees dynamically from existing tasks across Prod and Feature lists,
+    and includes a blank unassigned option at the top."""
     token_to_use = api_token if api_token else CLICKUP_API_TOKEN
-    headers = {"Authorization": token_to_use}
+    headers = {"Authorization": token_to_use, "Content-Type": "application/json"}
     
-    target_list_id = list_id if list_id else os.getenv("CLICKUP_PROD_LIST_ID", "205307273")
-    url = f"https://api.clickup.com/api/v2/list/{target_list_id}/member"
-    
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code != 200 and token_to_use != CLICKUP_API_TOKEN:
-        headers["Authorization"] = CLICKUP_API_TOKEN
+    list_ids_to_check = [
+        os.getenv("CLICKUP_PROD_LIST_ID", "205307273"),
+        os.getenv("CLICKUP_FEATURE_LIST_ID", "205406110")
+    ]
+    if list_id and list_id not in list_ids_to_check:
+        list_ids_to_check.append(list_id)
+        
+    unique_assignees = {}
+
+    for l_id in list_ids_to_check:
+        url = f"https://api.clickup.com/api/v2/list/{l_id}/task?include_closed=true"
         response = requests.get(url, headers=headers)
         
-    if response.status_code == 200:
-        members = response.json().get("members", [])
-        return [
-            {
-                "id": m.get("id"),
-                "username": m.get("username")
-            } 
-            for m in members if m.get("id")
-        ]
-    return []
+        # Fallback to master token if user token fails
+        if response.status_code != 200 and token_to_use != CLICKUP_API_TOKEN:
+            headers["Authorization"] = CLICKUP_API_TOKEN
+            response = requests.get(url, headers=headers)
+            
+        if response.status_code == 200:
+            tasks = response.json().get("tasks", [])
+            for task in tasks:
+                for assignee in task.get("assignees", []):
+                    uid = assignee.get("id")
+                    uname = assignee.get("username")
+                    if uid and uname:
+                        unique_assignees[uid] = {
+                            "id": uid,
+                            "username": uname
+                        }
+                        
+    formatted_assignees = list(unique_assignees.values())
+    
+    # Prepend the blank/unassigned option so users can clear the field
+    return [{"id": "", "username": "-- Unassigned --"}] + formatted_assignees
 
 def get_field_options_map(list_id: str, field_id: str, api_token: str = None):
     """Dynamically fetches dropdown options with master token fallback."""

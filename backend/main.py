@@ -5,7 +5,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-
 import json
 import datetime
 import re
@@ -270,6 +269,8 @@ async def create_clickup_ticket(
 async def bulk_upload_bugs(
     file: UploadFile = File(...),
     bug_type: str = Form(...),
+    assignee_id: str = Form(None),
+    feature_val: str = Form(None),
     created_by: str = Form(None)
 ):
     try:
@@ -302,12 +303,15 @@ async def bulk_upload_bugs(
             markdown_report = markdown_report.replace("❌ ACTUAL RESULT", "### ❌ Actual Result")
             markdown_report = markdown_report.replace("✅ EXPECTED RESULT", "### ✅ Expected Result")
             
+            # Uses form-level assignee_id and feature_val selected in the UI dropdowns
             result = create_task(
                 summary=summary,
                 description=markdown_report,
                 priority_val=final_priority,
                 repro_val=repro_rate,
                 bug_type=bug_type,
+                assignee_id=assignee_id,
+                feature_val=feature_val,
                 api_token=user_token
             )
             

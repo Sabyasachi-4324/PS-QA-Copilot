@@ -252,8 +252,60 @@ function App() {
   // =========================================================
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkBugType, setBulkBugType] = useState('prod');
+  const [bulkAssignees, setBulkAssignees] = useState([]);
+  const [bulkSelectedAssignee, setBulkSelectedAssignee] = useState('');
+  const [bulkFeatureOptions, setBulkFeatureOptions] = useState([]);
+  const [bulkSelectedFeature, setBulkSelectedFeature] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResults, setBulkResults] = useState(null);
+
+  // Custom Bulk Feature Dropdown State & Refs
+  const [isBulkFeatureOpen, setIsBulkFeatureOpen] = useState(false);
+  const [bulkFeatureSearch, setBulkFeatureSearch] = useState('');
+  const bulkFeatureDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleBulkClickOutside = (event) => {
+      if (bulkFeatureDropdownRef.current && !bulkFeatureDropdownRef.current.contains(event.target)) {
+        setIsBulkFeatureOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleBulkClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleBulkClickOutside);
+    };
+  }, []);
+
+  // Fetch dynamic assignees and feature options when bulkBugType changes
+  useEffect(() => {
+    const fetchBulkDynamicDropdowns = async () => {
+      try {
+        const assigneeRes = await axios.get(`${API_URL}/api/get-assignees?bug_type=${bulkBugType}`);
+        if (assigneeRes.data.status === 'success') {
+          setBulkAssignees(assigneeRes.data.assignees);
+          if (assigneeRes.data.assignees.length > 0) {
+            setBulkSelectedAssignee(assigneeRes.data.assignees[0].id);
+          }
+        }
+
+        if (bulkBugType === 'feature') {
+          const featureRes = await axios.get(`${API_URL}/api/get-feature-options`);
+          if (featureRes.data.status === 'success') {
+            setBulkFeatureOptions(featureRes.data.features);
+            if (featureRes.data.features.length > 0) {
+              setBulkSelectedFeature(featureRes.data.features[0]);
+            }
+          }
+        } else {
+          setBulkFeatureOptions([]);
+          setBulkSelectedFeature('');
+        }
+      } catch (err) {
+        console.error('Failed to fetch bulk dynamic dropdown options', err);
+      }
+    };
+    fetchBulkDynamicDropdowns();
+  }, [bulkBugType]);
 
   const bulkInputRef = useRef(null);
 
@@ -443,6 +495,15 @@ function App() {
 
     formData.append('file', bulkFile);
     formData.append('bug_type', bulkBugType);
+
+    if (bulkSelectedAssignee) {
+      formData.append('assignee_id', bulkSelectedAssignee);
+    }
+
+    if (bulkBugType === 'feature' && bulkSelectedFeature) {
+      formData.append('feature_val', bulkSelectedFeature);
+    }
+
     if (createdBy) {
       formData.append('created_by', createdBy);
     }
@@ -2054,7 +2115,7 @@ function App() {
 
               <form onSubmit={handleBulkSubmit}>
 
-                <div className="row g-3 mb-4">
+                <div className="row g-3 mb-3">
 
                   <div className="col-md-6">
 
@@ -2116,12 +2177,116 @@ function App() {
 
                 </div>
 
+                {/* --- Assignee & Feature Fields for Bulk Importer (Sequential Steps) --- */}
+                <div className="row g-3 mb-4">
+                  <div className={bulkBugType === 'feature' ? 'col-md-6' : 'col-12'}>
+                    <label className="field-label d-flex align-items-center gap-2">
+                      <span className="step-badge">3</span>
+                      Assignee
+                    </label>
+                    <select
+                      value={bulkSelectedAssignee}
+                      onChange={(e) => setBulkSelectedAssignee(e.target.value)}
+                      className="form-select input"
+                    >
+                      {bulkAssignees.length === 0 ? (
+                        <option value="">No assignees available</option>
+                      ) : (
+                        bulkAssignees.map((m) => (
+                          <option key={m.id} value={m.id}>{m.username}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {bulkBugType === 'feature' && (
+                    <div className="col-md-6">
+                      <label className="field-label d-flex align-items-center gap-2">
+                        <span className="step-badge">4</span>
+                        Feature
+                      </label>
+                      <div className="custom-dropdown-container position-relative" ref={bulkFeatureDropdownRef}>
+                        <div
+                          className={`form-control input custom-dropdown-trigger d-flex align-items-center justify-content-between ${isBulkFeatureOpen ? 'is-open' : ''}`}
+                          onClick={() => setIsBulkFeatureOpen(!isBulkFeatureOpen)}
+                          style={{ cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span className="text-truncate">
+                            {bulkSelectedFeature || 'Select feature...'}
+                          </span>
+                          <span className={`dropdown-chevron ${isBulkFeatureOpen ? 'rotate' : ''}`}>▼</span>
+                        </div>
+
+                        {isBulkFeatureOpen && (
+                          <div 
+                            className="position-absolute w-100 mt-1 shadow-lg rounded-3 p-2" 
+                            style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', zIndex: 1050 }}
+                          >
+                            <div className="mb-2 px-1">
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="Search features..."
+                                value={bulkFeatureSearch}
+                                onChange={(e) => setBulkFeatureSearch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ backgroundColor: '#f8fafc', color: '#1e293b', border: '1px solid #cbd5e1' }}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="custom-dropdown-list-scroll" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                              {bulkFeatureOptions.length === 0 ? (
+                                <div className="p-2 text-muted text-center small">No features available</div>
+                              ) : (
+                                (() => {
+                                  const filteredBulkOptions = bulkFeatureOptions.filter((opt) =>
+                                    opt.toLowerCase().includes(bulkFeatureSearch.toLowerCase())
+                                  );
+                                  if (filteredBulkOptions.length === 0) {
+                                    return <div className="p-2 text-muted text-center small">No matching features</div>;
+                                  }
+                                  return filteredBulkOptions.map((opt) => {
+                                    const isSelected = bulkSelectedFeature === opt;
+                                    return (
+                                      <div
+                                        key={opt}
+                                        className={`px-3 py-2 rounded-2 d-flex align-items-center justify-content-between`}
+                                        onClick={() => {
+                                          setBulkSelectedFeature(opt);
+                                          setIsBulkFeatureOpen(false);
+                                          setBulkFeatureSearch('');
+                                        }}
+                                        style={{ 
+                                          cursor: 'pointer', 
+                                          fontSize: '0.88rem', 
+                                          backgroundColor: isSelected ? '#e2e8f0' : '#ffffff', 
+                                          color: '#1e293b',
+                                          fontWeight: isSelected ? '600' : 'normal'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e2e8f0' : '#ffffff'}
+                                      >
+                                        <span className="text-truncate">{opt}</span>
+                                        {isSelected && <span className="ms-2 text-success fw-bold">✓</span>}
+                                      </div>
+                                    );
+                                  });
+                                })()
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="field mb-4">
 
                   <label className="field-label d-flex align-items-center gap-2">
 
                     <span className="step-badge">
-                      3
+                      {bulkBugType === 'feature' ? '5' : '4'}
                     </span>
 
                     Upload .csv Spreadsheet
@@ -2355,7 +2520,7 @@ function App() {
 
         {/* =====================================================
             TEMPLATES TAB
-        ================================================*/}
+        ================================================ */}
         {activeTab === 'templates' && (
           <section className="panel text-center">
             <div className="kb-icon-circle mx-auto mb-3">📄</div>
