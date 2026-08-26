@@ -47,27 +47,28 @@ def get_clickup_user_name(api_token: str):
         return {"success": False, "message": "Invalid API Token"}
 
 def get_list_assignees(list_id: str = None, api_token: str = None):
-    """Dynamically fetches all available organization assignees from the workspace/team with token fallback."""
+    """Fetches assignees directly from the specified ClickUp List ID."""
     token_to_use = api_token if api_token else CLICKUP_API_TOKEN
     headers = {"Authorization": token_to_use}
-    url = "https://api.clickup.com/api/v2/team"
+    
+    target_list_id = list_id if list_id else os.getenv("CLICKUP_PROD_LIST_ID", "205307273")
+    url = f"https://api.clickup.com/api/v2/list/{target_list_id}/member"
+    
     response = requests.get(url, headers=headers)
     
     if response.status_code != 200 and token_to_use != CLICKUP_API_TOKEN:
         headers["Authorization"] = CLICKUP_API_TOKEN
         response = requests.get(url, headers=headers)
-
+        
     if response.status_code == 200:
-        teams = response.json().get("teams", [])
-        if teams:
-            members = teams[0].get("members", [])
-            return [
-                {
-                    "id": m.get("user", {}).get("id"),
-                    "username": m.get("user", {}).get("username")
-                } 
-                for m in members if m.get("user")
-            ]
+        members = response.json().get("members", [])
+        return [
+            {
+                "id": m.get("id"),
+                "username": m.get("username")
+            } 
+            for m in members if m.get("id")
+        ]
     return []
 
 def get_field_options_map(list_id: str, field_id: str, api_token: str = None):
