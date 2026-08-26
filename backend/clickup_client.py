@@ -9,21 +9,27 @@ load_dotenv()
 CLICKUP_API_TOKEN = os.getenv("CLICKUP_API_TOKEN")
 
 LIST_IDS = {
-    "prod": os.getenv("CLICKUP_PROD_LIST_ID"),       
+    "prod": os.getenv("CLICKUP_PROD_LIST_ID"),        
     "feature": os.getenv("CLICKUP_FEATURE_LIST_ID")
 }
 
-HEADERS = {
-    "Authorization": CLICKUP_API_TOKEN,
-    "Content-Type": "application/json"
+# --- DYNAMIC CONFIG & MAPS PER LIST TYPE ---
+CONFIG_MAPS = {
+    "prod": {
+        "priority_field_id": os.getenv("CLICKUP_PROD_PRIORITY_FIELD_ID") or os.getenv("CLICKUP_PRIORITY_FIELD_ID"),
+        "repro_field_id": os.getenv("CLICKUP_PROD_REPRO_FIELD_ID") or os.getenv("CLICKUP_REPRO_FIELD_ID"),
+        "priority_map": json.loads(os.getenv("CLICKUP_PROD_PRIORITY_MAP") or os.getenv("CLICKUP_PRIORITY_MAP", "{}")),
+        "repro_map": json.loads(os.getenv("CLICKUP_PROD_REPRO_MAP") or os.getenv("CLICKUP_REPRO_MAP", "{}"))
+    },
+    "feature": {
+        "priority_field_id": os.getenv("CLICKUP_FEATURE_PRIORITY_FIELD_ID") or os.getenv("CLICKUP_PRIORITY_FIELD_ID"),
+        "repro_field_id": os.getenv("CLICKUP_FEATURE_REPRO_FIELD_ID") or os.getenv("CLICKUP_REPRO_FIELD_ID"),
+        "priority_map": json.loads(os.getenv("CLICKUP_FEATURE_PRIORITY_MAP") or os.getenv("CLICKUP_PRIORITY_MAP", "{}")),
+        "repro_map": json.loads(os.getenv("CLICKUP_FEATURE_REPRO_MAP") or os.getenv("CLICKUP_REPRO_MAP", "{}"))
+    }
 }
 
-# --- GLOBAL CONFIG & MAPS FROM .ENV ---
-PRIORITY_FIELD_ID = os.getenv("CLICKUP_PRIORITY_FIELD_ID")
-REPRO_RATE_FIELD_ID = os.getenv("CLICKUP_REPRO_FIELD_ID")
-
-priority_options_map = json.loads(os.getenv("CLICKUP_PRIORITY_MAP"))
-repro_options_map = json.loads(os.getenv("CLICKUP_REPRO_MAP"))
+FEATURE_FIELD_ID = os.getenv("CLICKUP_FEATURE_FIELD_ID")
 
 def get_clickup_user_name(api_token: str):
     """Verifies token with ClickUp and fetches the user's username."""
@@ -40,7 +46,75 @@ def get_clickup_user_name(api_token: str):
     else:
         return {"success": False, "message": "Invalid API Token"}
 
-def create_task(summary: str, description: str, priority_val: str, repro_val: str, bug_type: str, api_token: str = None):
+def get_list_assignees(list_id: str = None, api_token: str = None):
+    """Dynamically fetches all available organization assignees from the workspace/team with token fallback."""
+    token_to_use = api_token if api_token else CLICKUP_API_TOKEN
+    headers = {"Authorization": token_to_use}
+    url = "https://api.clickup.com/api/v2/team"
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200 and token_to_use != CLICKUP_API_TOKEN:
+        headers["Authorization"] = CLICKUP_API_TOKEN
+        response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        teams = response.json().get("teams", [])
+        if teams:
+            members = teams[0].get("members", [])
+            return [
+                {
+                    "id": m.get("user", {}).get("id"),
+                    "username": m.get("user", {}).get("username")
+                } 
+                for m in members if m.get("user")
+            ]
+    return []
+
+def get_field_options_map(list_id: str, field_id: str, api_token: str = None):
+    """Dynamically fetches dropdown options with master token fallback."""
+    token_to_use = api_token if api_token else CLICKUP_API_TOKEN
+    headers = {"Authorization": token_to_use}
+    url = f"https://api.clickup.com/api/v2/list/{list_id}/field"
+    
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200 and token_to_use != CLICKUP_API_TOKEN:
+        headers["Authorization"] = CLICKUP_API_TOKEN
+        response = requests.get(url, headers=headers)
+        
+    if response.status_code == 200:
+        fields = response.json().get("fields", [])
+        for field in fields:
+            if field.get("id") == field_id:
+                options = field.get("type_config", {}).get("options", [])
+                options_map = {}
+                for opt in options:
+                    opt_name = opt.get("name") or opt.get("id")
+                    options_map[opt_name] = opt.get("id")
+                    options_map[opt.get("id")] = opt.get("id")
+                return options_map
+    return {}
+
+def get_feature_custom_field_options(list_id: str, api_token: str = None):
+    """Discovers the 'Feature' custom field options map using FEATURE_FIELD_ID."""
+    if not FEATURE_FIELD_ID:
+        return None
+    options_map = get_field_options_map(list_id, FEATURE_FIELD_ID, api_token)
+    return {
+        "field_id": FEATURE_FIELD_ID,
+        "options_map": options_map
+    }
+
+def create_task(
+    summary: str, 
+    description: str, 
+    priority_val: str, 
+    repro_val: str, 
+    bug_type: str, 
+    assignee_id: str = None, 
+    feature_val: str = None, 
+    api_token: str = None
+):
     token_to_use = api_token if api_token else CLICKUP_API_TOKEN
     print(f"Creating ClickUp ticket: {summary} in {bug_type} list")
     
@@ -52,13 +126,34 @@ def create_task(summary: str, description: str, priority_val: str, repro_val: st
         "Content-Type": "application/json"
     }
 
+    # Load correct field IDs and maps depending on bug_type (prod vs feature)
+    bug_config = CONFIG_MAPS.get(bug_type, CONFIG_MAPS["prod"])
+    priority_field_id = bug_config["priority_field_id"]
+    repro_field_id = bug_config["repro_field_id"]
+    priority_options_map = bug_config["priority_map"]
+    repro_options_map = bug_config["repro_map"]
+
     custom_fields = []
     
-    if priority_val in priority_options_map:
-        custom_fields.append({"id": PRIORITY_FIELD_ID, "value": priority_options_map[priority_val]})
+    if priority_val in priority_options_map and priority_field_id:
+        custom_fields.append({"id": priority_field_id, "value": priority_options_map[priority_val]})
         
-    if repro_val in repro_options_map:
-        custom_fields.append({"id": REPRO_RATE_FIELD_ID, "value": repro_options_map[repro_val]})
+    if repro_val in repro_options_map and repro_field_id:
+        custom_fields.append({"id": repro_field_id, "value": repro_options_map[repro_val]})
+
+    # Dynamically handle Feature custom field ONLY for feature bugs
+    if bug_type == "feature" and feature_val and FEATURE_FIELD_ID:
+        feature_map = get_field_options_map(target_list_id, FEATURE_FIELD_ID, token_to_use)
+        
+        matched_val = feature_map.get(feature_val)
+        if not matched_val:
+            for k, v in feature_map.items():
+                if str(k).lower() == str(feature_val).lower():
+                    matched_val = v
+                    break
+        
+        if matched_val:
+            custom_fields.append({"id": FEATURE_FIELD_ID, "value": matched_val})
 
     payload = {
         "name": summary,
@@ -67,8 +162,19 @@ def create_task(summary: str, description: str, priority_val: str, repro_val: st
         "tags": ["ai-copilot"]
     }
 
+    if assignee_id:
+        try:
+            payload["assignees"] = [int(assignee_id)]
+        except ValueError:
+            payload["assignees"] = [assignee_id]
+
     response = requests.post(url, json=payload, headers=headers)
     
+    if response.status_code != 200 and api_token and api_token != CLICKUP_API_TOKEN:
+        print("[WARNING] User token failed. Retrying with master CLICKUP_API_TOKEN...")
+        headers["Authorization"] = CLICKUP_API_TOKEN
+        response = requests.post(url, json=payload, headers=headers)
+
     if response.status_code == 200:
         task_data = response.json()
         return {
@@ -96,10 +202,12 @@ def get_ai_tickets_from_clickup(api_token: str = None):
     headers = {"Authorization": token_to_use}
     ai_tickets = []
 
-    # Dynamically generates the reverse map (ID -> Label) from your environment variable
-    id_to_priority = {v: k for k, v in priority_options_map.items()}
-
     for bug_type, list_id in LIST_IDS.items():
+        bug_config = CONFIG_MAPS.get(bug_type, CONFIG_MAPS["prod"])
+        priority_field_id = bug_config["priority_field_id"]
+        priority_options_map = bug_config["priority_map"]
+        id_to_priority = {v: k for k, v in priority_options_map.items()}
+
         url = f"https://api.clickup.com/api/v2/list/{list_id}/task?include_closed=true"
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
@@ -117,7 +225,7 @@ def get_ai_tickets_from_clickup(api_token: str = None):
                     
                     priority = "P2"
                     for cf in task.get("custom_fields", []):
-                        if cf.get("id") == PRIORITY_FIELD_ID:
+                        if cf.get("id") == priority_field_id:
                             val = cf.get("value")
                             if val in id_to_priority:
                                 priority = id_to_priority[val]

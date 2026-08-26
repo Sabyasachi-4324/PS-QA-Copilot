@@ -170,6 +170,67 @@ function App() {
   const [reproRate, setReproRate] = useState('');
   const [bugType, setBugType] = useState('prod');
 
+  // Dynamic Dropdown States for Assignee and Feature
+  const [assignees, setAssignees] = useState([]);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [featureOptions, setFeatureOptions] = useState([]);
+  const [selectedFeature, setSelectedFeature] = useState('');
+
+  // Custom Feature Dropdown State & Refs
+  const [isFeatureOpen, setIsFeatureOpen] = useState(false);
+  const [featureSearch, setFeatureSearch] = useState('');
+  const featureDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (featureDropdownRef.current && !featureDropdownRef.current.contains(event.target)) {
+        setIsFeatureOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsFeatureOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Fetch dynamic assignees and feature options when bugType changes
+  useEffect(() => {
+    const fetchDynamicDropdowns = async () => {
+      try {
+        const assigneeRes = await axios.get(`${API_URL}/api/get-assignees?bug_type=${bugType}`);
+        if (assigneeRes.data.status === 'success') {
+          setAssignees(assigneeRes.data.assignees);
+          if (assigneeRes.data.assignees.length > 0 && !selectedAssignee) {
+            setSelectedAssignee(assigneeRes.data.assignees[0].id);
+          }
+        }
+
+        if (bugType === 'feature') {
+          const featureRes = await axios.get(`${API_URL}/api/get-feature-options`);
+          if (featureRes.data.status === 'success') {
+            setFeatureOptions(featureRes.data.features);
+            if (featureRes.data.features.length > 0 && !selectedFeature) {
+              setSelectedFeature(featureRes.data.features[0]);
+            }
+          }
+        } else {
+          setFeatureOptions([]);
+          setSelectedFeature('');
+        }
+      } catch (err) {
+        console.error('Failed to fetch dynamic dropdown options', err);
+      }
+    };
+    fetchDynamicDropdowns();
+  }, [bugType]);
+
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [ticketUrl, setTicketUrl] = useState('');
@@ -262,6 +323,15 @@ function App() {
     formData.append('priority', priority);
     formData.append('repro_rate', reproRate);
     formData.append('bug_type', bugType);
+
+    if (selectedAssignee) {
+      formData.append('assignee_id', selectedAssignee);
+    }
+
+    if (bugType === 'feature' && selectedFeature) {
+      formData.append('feature_val', selectedFeature);
+    }
+
     if (createdBy) {
       formData.append('created_by', createdBy);
     }
@@ -291,6 +361,8 @@ function App() {
         setPriority('');
         setReproRate('');
         setBugType('prod');
+        setSelectedAssignee('');
+        setSelectedFeature('');
 
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -1532,6 +1604,108 @@ function App() {
 
                 </div>
 
+                {/* --- Dynamic Assignee & Feature Fields (Optimized Layout) --- */}
+                <div className="row g-3 mb-3">
+                  <div className={bugType === 'feature' ? 'col-md-6' : 'col-12'}>
+                    <label className="field-label field-label--sm">
+                      Assignee:
+                    </label>
+                    <select
+                      value={selectedAssignee}
+                      onChange={(e) => setSelectedAssignee(e.target.value)}
+                      className="form-select input"
+                    >
+                      {assignees.length === 0 ? (
+                        <option value="">No assignees available</option>
+                      ) : (
+                        assignees.map((m) => (
+                          <option key={m.id} value={m.id}>{m.username}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {bugType === 'feature' && (
+                    <div className="col-md-6">
+                      <label className="field-label field-label--sm">
+                        Feature:
+                      </label>
+                      <div className="custom-dropdown-container position-relative" ref={featureDropdownRef}>
+                        <div
+                          className={`form-control input custom-dropdown-trigger d-flex align-items-center justify-content-between ${isFeatureOpen ? 'is-open' : ''}`}
+                          onClick={() => setIsFeatureOpen(!isFeatureOpen)}
+                          style={{ cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span className="text-truncate">
+                            {selectedFeature || 'Select feature...'}
+                          </span>
+                          <span className={`dropdown-chevron ${isFeatureOpen ? 'rotate' : ''}`}>▼</span>
+                        </div>
+
+                        {isFeatureOpen && (
+                          <div 
+                            className="position-absolute w-100 mt-1 shadow-lg rounded-3 p-2" 
+                            style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', zIndex: 1050 }}
+                          >
+                            <div className="mb-2 px-1">
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="Search features..."
+                                value={featureSearch}
+                                onChange={(e) => setFeatureSearch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ backgroundColor: '#f8fafc', color: '#1e293b', border: '1px solid #cbd5e1' }}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="custom-dropdown-list-scroll" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                              {featureOptions.length === 0 ? (
+                                <div className="p-2 text-muted text-center small">No features available</div>
+                              ) : (
+                                (() => {
+                                  const filteredOptions = featureOptions.filter((opt) =>
+                                    opt.toLowerCase().includes(featureSearch.toLowerCase())
+                                  );
+                                  if (filteredOptions.length === 0) {
+                                    return <div className="p-2 text-muted text-center small">No matching features</div>;
+                                  }
+                                  return filteredOptions.map((opt) => {
+                                    const isSelected = selectedFeature === opt;
+                                    return (
+                                      <div
+                                        key={opt}
+                                        className={`px-3 py-2 rounded-2 d-flex align-items-center justify-content-between`}
+                                        onClick={() => {
+                                          setSelectedFeature(opt);
+                                          setIsFeatureOpen(false);
+                                          setFeatureSearch('');
+                                        }}
+                                        style={{ 
+                                          cursor: 'pointer', 
+                                          fontSize: '0.88rem', 
+                                          backgroundColor: isSelected ? '#e2e8f0' : '#ffffff', 
+                                          color: '#1e293b',
+                                          fontWeight: isSelected ? '600' : 'normal'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e2e8f0' : '#ffffff'}
+                                      >
+                                        <span className="text-truncate">{opt}</span>
+                                        {isSelected && <span className="ms-2 text-success fw-bold">✓</span>}
+                                      </div>
+                                    );
+                                  });
+                                })()
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="row g-3 mb-3">
 
                   <div className="col-md-6">
@@ -2101,7 +2275,7 @@ function App() {
         )}
 
         {/* =====================================================
-            DASHBOARD TAB (Improved with Priority Breakdown & Center Aligned Headers)
+            DASHBOARD TAB
         ===================================================== */}
         {activeTab === 'dashboard' && (
           <section className="panel">
@@ -2180,8 +2354,8 @@ function App() {
         )}
 
         {/* =====================================================
-            TEMPLATES TAB (Compact Sheet Table Preview - Center Aligned Headers)
-        ===================================================== */}
+            TEMPLATES TAB
+        ================================================*/}
         {activeTab === 'templates' && (
           <section className="panel text-center">
             <div className="kb-icon-circle mx-auto mb-3">📄</div>
@@ -2243,7 +2417,7 @@ function App() {
 
         {/* =====================================================
             SETTINGS TAB
-        ===================================================== */}
+        ================================================ */}
         {activeTab === 'settings' && (
           <section className="panel text-center">
             <div className="kb-icon-circle mx-auto mb-3">🔑</div>

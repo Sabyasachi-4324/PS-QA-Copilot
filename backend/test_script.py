@@ -1,47 +1,47 @@
-import time
-from backend.knowledge_base import retrieve_context
-from backend.bug_generator import generate_structured_bug
+import requests
+import json
 
-def run_test():
-    # Sample tester input (vague observation)
-    raw_tester_note = (
-        "I lost connection while claiming my Treasure road reward. "
-        "When internet came back, the reward popup popped up again on screen. "
-        "So it got added to my inventory twice. I think this is a bug."
-    )
+# Hardcoded credentials from your environment configuration
+API_TOKEN = "pk_234003367_PGR9SHZE9NLN8DHBBN4UF7VKDKRZCM76"
+PROD_LIST_ID = "901616434578"
 
-    print("=" * 60)
-    print(f"TESTER OBSERVATION:\n\"{raw_tester_note}\"")
-    print("=" * 60)
+headers = {
+    "Authorization": API_TOKEN,
+    "Content-Type": "application/json"
+}
 
-    # Measure Retrieval Time
-    print("\n--- Searching Pinecone for matching rules...")
-    start_time = time.time()
-    retrieved_rules = retrieve_context(raw_tester_note)
-    retrieval_time = round(time.time() - start_time, 2)
+url = f"https://api.clickup.com/api/v2/list/{PROD_LIST_ID}/field"
 
-    print(f"\n[SUCCESS] Retrieved Context (in {retrieval_time}s):")
-    print("-" * 60)
-    print(retrieved_rules)
-    print("-" * 60)
+print("="*60)
+print("FETCHING CUSTOM FIELDS FOR PROD LIST")
+print("="*60)
 
-    # Measure Generation Time
-    print("\n--- AI Generating Structured Ticket...")
-    start_time = time.time()
-    ticket = generate_structured_bug(raw_tester_note)
-    generation_time = round(time.time() - start_time, 2)
+response = requests.get(url, headers=headers)
 
-    print("\n" + "=" * 60)
-    print("FINAL GENERATED BUG TICKET")
-    print("=" * 60)
-    for key, value in ticket.items():
-        print(f"{key.upper()}: {value}")
-    print("=" * 60)
-    print(
-        f"Speed: Retrieval ({retrieval_time}s) + "
-        f"Generation ({generation_time}s) = "
-        f"{round(retrieval_time + generation_time, 2)}s total"
-    )
-
-if __name__ == "__main__":
-    run_test()
+if response.status_code == 200:
+    data = response.json()
+    fields = data.get("fields", [])
+    
+    print(f"\nSuccessfully found {len(fields)} fields in your Prod List:\n" + "-"*60)
+    
+    for field in fields:
+        field_id = field.get("id")
+        field_name = field.get("name")
+        field_type = field.get("type")
+        
+        print(f"Field Name : {field_name}")
+        print(f"Field ID   : {field_id}")
+        print(f"Type       : {field_type}")
+        
+        if field_type == "drop_down":
+            print("   Dropdown Options & UUIDs:")
+            options = field.get("type_config", {}).get("options", [])
+            for opt in options:
+                opt_name = opt.get("name", "Unnamed")
+                opt_id = opt.get("id")
+                print(f"     - '{opt_name}' : '{opt_id}'")
+        
+        print("="*60)
+else:
+    print(f"Failed to fetch fields. Status Code: {response.status_code}")
+    print(response.text)

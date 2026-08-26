@@ -1,4 +1,11 @@
+import sys
 import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+
 import json
 import datetime
 import re
@@ -9,11 +16,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 
-# Use relative imports for package compatibility on Render
-from .bug_generator import generate_structured_bug
-from .clickup_client import create_task, upload_attachment, get_clickup_user_name, get_ai_tickets_from_clickup
-from .knowledge_base import ingest_single_document
-from .slack_bot import router as slack_router
+# Use relative imports for package compatibility
+from bug_generator import generate_structured_bug
+from clickup_client import (
+    create_task, 
+    upload_attachment, 
+    get_clickup_user_name, 
+    get_ai_tickets_from_clickup, 
+    get_list_assignees, 
+    get_feature_custom_field_options, 
+    LIST_IDS
+)
+from knowledge_base import ingest_single_document
 
 load_dotenv()
 
@@ -30,9 +44,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Include the Slack bot routes seamlessly into the main app
-app.include_router(slack_router)
 
 def load_users():
     """Loads registered users and tokens from persistent JSON storage."""
@@ -143,6 +154,27 @@ async def get_tickets():
         print(f"Error fetching live tickets from ClickUp: {e}")
         return {"status": "error", "total_count": 0, "tickets": []}
 
+@app.get("/api/get-assignees")
+async def get_assignees_endpoint(bug_type: str = "prod"):
+    """Dynamically fetches all available organization assignees for the frontend dropdown."""
+    target_list_id = LIST_IDS.get(bug_type, LIST_IDS["prod"])
+    assignees = get_list_assignees(target_list_id)
+    return {"status": "success", "assignees": assignees}
+
+@app.get("/api/get-feature-options")
+async def get_feature_options_endpoint():
+    """Dynamically fetches available dropdown options for the Feature custom field, filtering out UUID keys."""
+    feature_list_id = LIST_IDS.get("feature")
+    feature_info = get_feature_custom_field_options(feature_list_id)
+    
+    options = []
+    if feature_info and "options_map" in feature_info:
+        options_map = feature_info["options_map"]
+        # Filter out UUID keys so only clean option names appear in the UI dropdown
+        options = [k for k, v in options_map.items() if k != v]
+        
+    return {"status": "success", "features": options}
+
 @app.post("/api/generate-bug")
 async def generate_bug_report(description: str = Form(...)):
     bug_data = generate_structured_bug(description)
@@ -180,6 +212,8 @@ async def create_clickup_ticket(
     priority: str = Form(...),
     repro_rate: str = Form(...),
     bug_type: str = Form(...),
+    assignee_id: str = Form(None),
+    feature_val: str = Form(None),
     created_by: str = Form(None),
     evidence: UploadFile = File(None)
 ):
@@ -191,7 +225,16 @@ async def create_clickup_ticket(
     saved_users = load_users()
     user_token = saved_users.get(created_by) if created_by else None
 
-    clickup_task = create_task(summary, markdown_report, priority, repro_rate, bug_type, api_token=user_token)
+    clickup_task = create_task(
+        summary=summary, 
+        description=markdown_report, 
+        priority_val=priority, 
+        repro_val=repro_rate, 
+        bug_type=bug_type, 
+        assignee_id=assignee_id, 
+        feature_val=feature_val, 
+        api_token=user_token
+    )
     
     if not clickup_task:
         return {"status": "error", "message": "Failed to create ClickUp ticket."}
