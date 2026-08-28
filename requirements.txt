@@ -12,3 +12,5 @@ pypdf
 google-generativeai
 python-dotenv
 slack_bolt
+pymongo
+dnspython
