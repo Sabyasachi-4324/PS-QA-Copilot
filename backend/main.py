@@ -28,9 +28,11 @@ from clickup_client import (
 )
 from knowledge_base import ingest_single_document
 
+# Import MongoDB user storage helpers
+from db import db_load_users, db_save_user
+
 load_dotenv()
 
-USER_DB_FILE = os.getenv("USER_DB_FILE", "users_db.json")
 TICKET_DB_FILE = os.getenv("TICKET_DB_FILE", "tickets_db.json")
 FASTAPI_TITLE = os.getenv("FASTAPI_TITLE", "PS QA Copilot API")
 
@@ -45,19 +47,17 @@ app.add_middleware(
 )
 
 def load_users():
-    """Loads registered users and tokens from persistent JSON storage."""
-    if os.path.exists(USER_DB_FILE):
-        try:
-            with open(USER_DB_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+    """Loads registered users and tokens from MongoDB storage."""
+    try:
+        return db_load_users()
+    except Exception as e:
+        print(f"Error loading users from MongoDB: {e}")
+        return {}
 
 def save_users(users_dict):
-    """Saves registered users and tokens to persistent JSON storage."""
-    with open(USER_DB_FILE, "w") as f:
-        json.dump(users_dict, f, indent=4)
+    """Saves registered users and tokens to MongoDB storage."""
+    for username, token in users_dict.items():
+        db_save_user(username, token)
 
 def load_tickets():
     """Loads created ticket history from persistent JSON storage."""

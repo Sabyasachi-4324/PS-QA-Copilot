@@ -2,6 +2,7 @@ import requests
 import os
 import datetime
 import json
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,6 +13,10 @@ LIST_IDS = {
     "prod": os.getenv("CLICKUP_PROD_LIST_ID"),        
     "feature": os.getenv("CLICKUP_FEATURE_LIST_ID")
 }
+
+# --- IN-MEMORY CACHE (TTL = 10 minutes) ---
+_cache = {}
+CACHE_TTL = 600  # 600 seconds = 10 minutes
 
 # --- DYNAMIC CONFIG & MAPS PER LIST TYPE ---
 CONFIG_MAPS = {
@@ -47,9 +52,17 @@ def get_clickup_user_name(api_token: str):
         return {"success": False, "message": "Invalid API Token"}
 
 def get_list_assignees(list_id: str = None, api_token: str = None):
-    """Harvests unique assignees dynamically from existing tasks across Prod and Feature lists,
-    and includes a blank unassigned option at the top."""
+    """Harvests unique assignees dynamically from existing tasks across Prod and Feature lists with caching."""
     token_to_use = api_token if api_token else CLICKUP_API_TOKEN
+    cache_key = f"assignees_{list_id}_{token_to_use}"
+    current_time = time.time()
+    
+    # Return cached data if valid
+    if cache_key in _cache:
+        data, timestamp = _cache[cache_key]
+        if current_time - timestamp < CACHE_TTL:
+            return data
+
     headers = {"Authorization": token_to_use, "Content-Type": "application/json"}
     
     list_ids_to_check = [
@@ -83,13 +96,24 @@ def get_list_assignees(list_id: str = None, api_token: str = None):
                         }
                         
     formatted_assignees = list(unique_assignees.values())
+    result = [{"id": "", "username": "-- Unassigned --"}] + formatted_assignees
     
-    # Prepend the blank/unassigned option so users can clear the field
-    return [{"id": "", "username": "-- Unassigned --"}] + formatted_assignees
+    # Store in cache
+    _cache[cache_key] = (result, current_time)
+    return result
 
 def get_field_options_map(list_id: str, field_id: str, api_token: str = None):
-    """Dynamically fetches dropdown options with master token fallback."""
+    """Dynamically fetches dropdown options with master token fallback and caching."""
     token_to_use = api_token if api_token else CLICKUP_API_TOKEN
+    cache_key = f"field_options_{list_id}_{field_id}_{token_to_use}"
+    current_time = time.time()
+    
+    # Return cached data if valid
+    if cache_key in _cache:
+        data, timestamp = _cache[cache_key]
+        if current_time - timestamp < CACHE_TTL:
+            return data
+
     headers = {"Authorization": token_to_use}
     url = f"https://api.clickup.com/api/v2/list/{list_id}/field"
     
@@ -99,18 +123,21 @@ def get_field_options_map(list_id: str, field_id: str, api_token: str = None):
         headers["Authorization"] = CLICKUP_API_TOKEN
         response = requests.get(url, headers=headers)
         
+    options_map = {}
     if response.status_code == 200:
         fields = response.json().get("fields", [])
         for field in fields:
             if field.get("id") == field_id:
                 options = field.get("type_config", {}).get("options", [])
-                options_map = {}
                 for opt in options:
                     opt_name = opt.get("name") or opt.get("id")
                     options_map[opt_name] = opt.get("id")
                     options_map[opt.get("id")] = opt.get("id")
-                return options_map
-    return {}
+                break
+                
+    # Store in cache
+    _cache[cache_key] = (options_map, current_time)
+    return options_map
 
 def get_feature_custom_field_options(list_id: str, api_token: str = None):
     """Discovers the 'Feature' custom field options map using FEATURE_FIELD_ID."""
