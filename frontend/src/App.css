@@ -2509,3 +2509,446 @@ select:focus-visible {
 /* =========================================================
    END
    ========================================================= */
+
+/* =========================================================
+   EXTRACTED INLINE STYLES
+   All former App.jsx inline styles are maintained here.
+   ========================================================= */
+
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  box-sizing: border-box;
+  background: rgba(2, 6, 23, 0.70);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.welcome-shell {
+  width: min(455px, 92vw);
+  padding: 1.5px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #60a5fa, #8b5cf6 38%, #d946ef 68%, #f59e0b);
+  box-shadow: 0 22px 55px rgba(0,0,0,0.50), 0 0 40px rgba(139,92,246,0.18);
+}
+
+.welcome-content {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 22px 25px 18px;
+  border-radius: 18.5px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 0%, rgba(139,92,246,0.30), transparent 34%), linear-gradient(145deg, #0d1328 0%, #151536 52%, #21142f 100%);
+  color: #fff;
+  text-align: center;
+}
+
+.welcome-glow {
+  position: absolute;
+  width: 170px;
+  height: 110px;
+  top: -75px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(168,85,247,0.40), transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.welcome-logo-wrap {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  position: relative;
+}
+
+.welcome-logo {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  display: block;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.welcome-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 2px;
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: 2.15rem;
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  color: #fff;
+}
+
+.welcome-title-gradient {
+  background: linear-gradient(90deg, #f9a8d4, #d946ef 40%, #8b5cf6 70%, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 12px auto 11px;
+  max-width: 330px;
+}
+
+.welcome-divider-line-left {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(168,85,247,0.7));
+}
+
+.welcome-divider-dot {
+  color: #d946ef;
+  font-size: 9px;
+}
+
+.welcome-divider-line-right {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(168,85,247,0.7), transparent);
+}
+
+.welcome-description {
+  max-width: 365px;
+  margin: 0 auto 14px;
+  color: #cbd5e1;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.welcome-tip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto 12px;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid rgba(139,92,246,0.38);
+  background: rgba(15,23,42,0.60);
+}
+
+.welcome-tip-icon {
+  flex: 0 0 auto;
+  width: 37px;
+  height: 37px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 18px;
+  background: radial-gradient(circle at 35% 30%, #fef08a, #facc15 35%, #7c3aed 72%, #312e81);
+  box-shadow: 0 0 15px rgba(250,204,21,0.15);
+}
+
+.welcome-tip-text {
+  color: #dbe4f5;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.welcome-tip-strong {
+  color: #facc15;
+}
+
+.welcome-start-btn {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  padding: 0 15px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  background: linear-gradient(100deg, #f59e0b 0%, #f43f5e 30%, #d946ef 62%, #4f46e5 100%);
+  box-shadow: 0 8px 20px rgba(217,70,239,0.22);
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+
+.welcome-start-icon {
+  margin-right: 6px;
+}
+
+.welcome-start-arrow {
+  margin-left: 8px;
+  font-size: 1rem;
+}
+
+.welcome-security {
+  margin-top: 9px;
+  color: #94a3b8;
+  font-size: 0.59rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.welcome-security-icon {
+  color: #38bdf8;
+  font-size: 0.75rem;
+}
+
+.loading-overlay-report {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(11, 15, 25, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  color: #fff;
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading-spinner-report {
+  width: 4rem;
+  height: 4rem;
+  border-width: 4px;
+}
+
+.loading-message {
+  max-width: 500px;
+}
+
+.loading-overlay-knowledge {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(11,25,23,0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  color: #fff;
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading-spinner-knowledge {
+  width: 4rem;
+  height: 4rem;
+  border-width: 4px;
+}
+
+.loading-overlay-bulk {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(25,11,25,0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  color: #fff;
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading-spinner-bulk {
+  width: 4rem;
+  height: 4rem;
+  border-width: 4px;
+  color: #a855f7;
+}
+
+.bulk-pipeline-badge {
+  border: 1px solid #a855f7;
+}
+
+.brand-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+}
+
+.page-hero-custom {
+  min-height: 130px;
+}
+
+.hero-copy-custom {
+  flex: 1;
+}
+
+.hero-art-custom {
+  font-size: 3.5rem;
+  margin-left: 1.5rem;
+  flex-shrink: 0;
+}
+
+.dropdown-trigger {
+  cursor: pointer;
+  user-select: none;
+}
+
+.custom-feature-dropdown-menu {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  z-index: 1050;
+}
+
+.dropdown-search {
+  background-color: #f8fafc;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+}
+
+.custom-dropdown-list-scroll {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.kb-intro {
+  max-width: 640px;
+}
+
+.templates-link {
+  color: #38bdf8;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.dashboard-stat-card {
+  background: linear-gradient(135deg, #131d31 0%, #1a103c 100%);
+  border: 1px solid rgba(139,92,246,0.3);
+}
+
+.dashboard-summary-card {
+  background: #131d31;
+  border: 1px solid #22304a;
+}
+
+.dashboard-table-head {
+  background: #1e293b;
+}
+
+.col-priority {
+  width: 100px;
+}
+
+.col-created-by {
+  width: 140px;
+}
+
+.col-timestamp {
+  width: 150px;
+}
+
+.col-action {
+  width: 100px;
+}
+
+.ticket-summary-cell {
+  max-width: 300px;
+}
+
+.ticket-timestamp {
+  font-size: 0.85rem;
+}
+
+.templates-intro {
+  max-width: 640px;
+}
+
+.templates-content {
+  max-width: 800px;
+  margin: 2rem auto 0;
+}
+
+.template-download-btn {
+  padding: 1rem;
+  font-weight: bold;
+}
+
+.template-priority-col {
+  width: 160px;
+}
+
+.settings-intro {
+  max-width: 640px;
+}
+
+.settings-form {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.settings-alert {
+  max-width: 640px;
+  margin: 1rem auto 0;
+}
+
+.settings-content {
+  max-width: 640px;
+  margin: 2rem auto 0;
+}
+
+/* Former inline hover behavior */
+.welcome-start-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.custom-dropdown-option {
+  cursor: pointer;
+  font-size: 0.88rem;
+  background-color: #ffffff;
+  color: #1e293b;
+  font-weight: normal;
+}
+
+.custom-dropdown-option:hover {
+  background-color: #f1f5f9;
+}
+
+.custom-dropdown-option.selected {
+  background-color: #e2e8f0;
+  font-weight: 600;
+}
+

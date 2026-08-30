@@ -42,10 +42,11 @@ function App() {
   // Ticket History State for Dashboard
   const [allTickets, setAllTickets] = useState([]);
 
-  // Fetch users & tickets on startup and tab changes
+  // Preload all initial data (users, tickets, assignees, and features) on website startup
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAllStartupData = async () => {
       try {
+        // 1. Fetch Users & Dashboard Tickets
         const userRes = await axios.get(`${API_URL}/api/get-users`);
         if (userRes.data.status === 'success') {
           const fetchedUsers = userRes.data.users;
@@ -63,12 +64,41 @@ function App() {
         if (ticketRes.data.status === 'success') {
           setAllTickets(ticketRes.data.tickets);
         }
+
+        // 2. Preload Default (Prod) Assignees
+        const assigneeRes = await axios.get(`${API_URL}/api/get-assignees?bug_type=prod`);
+        if (assigneeRes.data.status === 'success') {
+          const fetchedAssignees = assigneeRes.data.assignees;
+          setAssignees(fetchedAssignees);
+          if (fetchedAssignees.length > 0) {
+            setSelectedAssignee(fetchedAssignees[0].id);
+          }
+          setBulkAssignees(fetchedAssignees);
+          if (fetchedAssignees.length > 0) {
+            setBulkSelectedAssignee(fetchedAssignees[0].id);
+          }
+        }
+
+        // 3. Preload Feature Custom Field Options
+        const featureRes = await axios.get(`${API_URL}/api/get-feature-options`);
+        if (featureRes.data.status === 'success') {
+          const fetchedFeatures = featureRes.data.features;
+          setFeatureOptions(fetchedFeatures);
+          if (fetchedFeatures.length > 0) {
+            setSelectedFeature(fetchedFeatures[0]);
+          }
+          setBulkFeatureOptions(fetchedFeatures);
+          if (fetchedFeatures.length > 0) {
+            setBulkSelectedFeature(fetchedFeatures[0]);
+          }
+        }
+
       } catch (err) {
-        console.error('Failed to fetch initial data', err);
+        console.error('Failed to preload initial application data', err);
       }
     };
-    fetchData();
-  }, [activeTab]);
+    fetchAllStartupData();
+  }, []);
 
   const handleUserChange = (name) => {
     setCreatedBy(name);
@@ -657,299 +687,88 @@ function App() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="welcome-title"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            zIndex: 10000,
 
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-
-            padding: '15px',
-            boxSizing: 'border-box',
-
-            background: 'rgba(2, 6, 23, 0.70)',
-
-            backdropFilter: 'blur(7px)',
-            WebkitBackdropFilter: 'blur(7px)',
-          }}
-        >
+         className="welcome-overlay">
           <div
-            style={{
-              width: 'min(455px, 92vw)',
-              padding: '1.5px',
-              borderRadius: '20px',
 
-              background:
-                'linear-gradient(135deg, #60a5fa, #8b5cf6 38%, #d946ef 68%, #f59e0b)',
-
-              boxShadow:
-                '0 22px 55px rgba(0,0,0,0.50), 0 0 40px rgba(139,92,246,0.18)',
-            }}
-          >
+           className="welcome-shell">
             <div
-              style={{
-                position: 'relative',
 
-                width: '100%',
-                boxSizing: 'border-box',
-
-                padding: '22px 25px 18px',
-
-                borderRadius: '18.5px',
-
-                overflow: 'hidden',
-
-                background:
-                  'radial-gradient(circle at 50% 0%, rgba(139,92,246,0.30), transparent 34%), linear-gradient(145deg, #0d1328 0%, #151536 52%, #21142f 100%)',
-
-                color: '#fff',
-
-                textAlign: 'center',
-              }}
-            >
+             className="welcome-content">
               <div
-                style={{
-                  position: 'absolute',
 
-                  width: '170px',
-                  height: '110px',
-
-                  top: '-75px',
-                  left: '50%',
-
-                  transform: 'translateX(-50%)',
-
-                  borderRadius: '50%',
-
-                  background:
-                    'radial-gradient(circle, rgba(168,85,247,0.40), transparent 70%)',
-
-                  filter: 'blur(10px)',
-
-                  pointerEvents: 'none',
-                }}
-              />
+               className="welcome-glow"/>
 
               <div
-                style={{
-                  width: '76px',
-                  height: '76px',
 
-                  margin: '0 auto 12px',
-
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-
-                  background: 'transparent',
-
-                  border: 'none',
-
-                  boxShadow: 'none',
-
-                  position: 'relative',
-                }}
-              >
+               className="welcome-logo-wrap">
                 <img
                   src="/logo.png"
                   alt="PS-QA Copilot Logo"
-                  style={{
-                    width: '70px',
-                    height: '70px',
 
-                    objectFit: 'contain',
-
-                    display: 'block',
-
-                    background: 'transparent',
-
-                    border: 'none',
-                    outline: 'none',
-                    boxShadow: 'none',
-                  }}
-                />
+                 className="welcome-logo"/>
               </div>
 
               <div
-                style={{
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
 
-                  color: '#f8fafc',
-
-                  marginBottom: '2px',
-                }}
-              >
+               className="welcome-label">
                 Welcome to
               </div>
 
               <h2
                 id="welcome-title"
-                style={{
-                  margin: 0,
 
-                  fontSize: '2.15rem',
-
-                  lineHeight: 1.05,
-
-                  fontWeight: 900,
-
-                  letterSpacing: '-0.045em',
-
-                  color: '#fff',
-                }}
-              >
+               className="welcome-title">
                 PS-QA{' '}
 
                 <span
-                  style={{
-                    background:
-                      'linear-gradient(90deg, #f9a8d4, #d946ef 40%, #8b5cf6 70%, #60a5fa)',
 
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-
-                    backgroundClip: 'text',
-                  }}
-                >
+                 className="welcome-title-gradient">
                   Copilot!
                 </span>
               </h2>
 
               <div
-                style={{
-                  display: 'flex',
 
-                  alignItems: 'center',
-
-                  justifyContent: 'center',
-
-                  gap: '7px',
-
-                  margin: '12px auto 11px',
-
-                  maxWidth: '330px',
-                }}
-              >
+               className="welcome-divider">
                 <div
-                  style={{
-                    flex: 1,
 
-                    height: '1px',
-
-                    background:
-                      'linear-gradient(90deg, transparent, rgba(168,85,247,0.7))',
-                  }}
-                />
+                 className="welcome-divider-line-left"/>
 
                 <span
-                  style={{
-                    color: '#d946ef',
-                    fontSize: '9px',
-                  }}
-                >
+
+                 className="welcome-divider-dot">
                   ◆
                 </span>
 
                 <div
-                  style={{
-                    flex: 1,
 
-                    height: '1px',
-
-                    background:
-                      'linear-gradient(90deg, rgba(168,85,247,0.7), transparent)',
-                  }}
-                />
+                 className="welcome-divider-line-right"/>
               </div>
 
               <p
-                style={{
-                  maxWidth: '365px',
 
-                  margin: '0 auto 14px',
-
-                  color: '#cbd5e1',
-
-                  fontSize: '0.76rem',
-
-                  lineHeight: 1.45,
-                }}
-              >
+               className="welcome-description">
                 Your intelligent assistant for converting raw QA observations
                 into developer-ready ClickUp tickets with RAG rulebook
                 context.
               </p>
 
               <div
-                style={{
-                  display: 'flex',
 
-                  alignItems: 'center',
-
-                  gap: '10px',
-
-                  width: '100%',
-
-                  boxSizing: 'border-box',
-
-                  margin: '0 auto 12px',
-
-                  padding: '10px 12px',
-
-                  textAlign: 'left',
-
-                  borderRadius: '12px',
-
-                  border:
-                    '1px solid rgba(139,92,246,0.38)',
-
-                  background:
-                    'rgba(15,23,42,0.60)',
-                }}
-              >
+               className="welcome-tip">
                 <div
-                  style={{
-                    flex: '0 0 auto',
 
-                    width: '37px',
-                    height: '37px',
-
-                    display: 'grid',
-                    placeItems: 'center',
-
-                    borderRadius: '50%',
-
-                    fontSize: '18px',
-
-                    background:
-                      'radial-gradient(circle at 35% 30%, #fef08a, #facc15 35%, #7c3aed 72%, #312e81)',
-
-                    boxShadow:
-                      '0 0 15px rgba(250,204,21,0.15)',
-                  }}
-                >
+                 className="welcome-tip-icon">
                   💡
                 </div>
 
                 <div
-                  style={{
-                    color: '#dbe4f5',
 
-                    fontSize: '0.68rem',
-
-                    lineHeight: 1.4,
-                  }}
-                >
+                 className="welcome-tip-text">
                   <strong
-                    style={{
-                      color: '#facc15',
-                    }}
-                  >
+
+                   className="welcome-tip-strong">
                     Quick Tip:
                   </strong>{' '}
                   Generate single tickets, train the AI with new rulebooks,
@@ -960,92 +779,28 @@ function App() {
               <button
                 type="button"
                 onClick={handleCloseWelcome}
-                style={{
-                  width: '100%',
-
-                  height: '44px',
-
-                  border: 'none',
-
-                  borderRadius: '10px',
-
-                  padding: '0 15px',
-
-                  cursor: 'pointer',
-
-                  color: '#fff',
-
-                  fontSize: '0.82rem',
-
-                  fontWeight: 800,
-
-                  background:
-                    'linear-gradient(100deg, #f59e0b 0%, #f43f5e 30%, #d946ef 62%, #4f46e5 100%)',
-
-                  boxShadow:
-                    '0 8px 20px rgba(217,70,239,0.22)',
-
-                  transition:
-                    'transform 0.18s ease, filter 0.18s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform =
-                    'translateY(-1px)';
-
-                  e.currentTarget.style.filter =
-                    'brightness(1.08)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform =
-                    'translateY(0)';
-
-                  e.currentTarget.style.filter =
-                    'brightness(1)';
-                }}
-              >
+                className="welcome-start-btn">
                 <span
-                  style={{
-                    marginRight: '6px',
-                  }}
-                >
+
+                 className="welcome-start-icon">
                   🚀
                 </span>
 
                 Let's Get Started
 
                 <span
-                  style={{
-                    marginLeft: '8px',
-                    fontSize: '1rem',
-                  }}
-                >
+
+                 className="welcome-start-arrow">
                   →
                 </span>
               </button>
 
               <div
-                style={{
-                  marginTop: '9px',
 
-                  color: '#94a3b8',
-
-                  fontSize: '0.59rem',
-
-                  display: 'flex',
-
-                  alignItems: 'center',
-
-                  justifyContent: 'center',
-
-                  gap: '5px',
-                }}
-              >
+               className="welcome-security">
                 <span
-                  style={{
-                    color: '#38bdf8',
-                    fontSize: '0.75rem',
-                  }}
-                >
+
+                 className="welcome-security-icon">
                   ♢
                 </span>
 
@@ -1062,38 +817,11 @@ function App() {
       ========================================================= */}
       {loading && activeTab === 'report' && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
 
-            backgroundColor:
-              'rgba(11, 15, 25, 0.88)',
-
-            backdropFilter: 'blur(8px)',
-
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-
-            zIndex: 9999,
-
-            color: '#fff',
-            textAlign: 'center',
-
-            padding: '2rem',
-          }}
-        >
+         className="loading-overlay-report">
           <div
-            className="spinner-border text-primary mb-4"
-            style={{
-              width: '4rem',
-              height: '4rem',
-              borderWidth: '4px',
-            }}
+            className="spinner-border text-primary mb-4 loading-spinner-report"
+
             role="status"
           />
 
@@ -1102,10 +830,8 @@ function App() {
           </h2>
 
           <p
-            className="text-info fs-5 mb-4"
-            style={{
-              maxWidth: '500px',
-            }}
+            className="text-info fs-5 mb-4 loading-message"
+
           >
             {loadingMessage ||
               'Processing your bug observation with RAG context...'}
@@ -1122,38 +848,11 @@ function App() {
       ========================================================= */}
       {uploadLoading && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
 
-            backgroundColor:
-              'rgba(11,25,23,0.88)',
-
-            backdropFilter: 'blur(8px)',
-
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-
-            zIndex: 9999,
-
-            color: '#fff',
-            textAlign: 'center',
-
-            padding: '2rem',
-          }}
-        >
+         className="loading-overlay-knowledge">
           <div
-            className="spinner-border text-info mb-4"
-            style={{
-              width: '4rem',
-              height: '4rem',
-              borderWidth: '4px',
-            }}
+            className="spinner-border text-info mb-4 loading-spinner-knowledge"
+
             role="status"
           />
 
@@ -1162,10 +861,8 @@ function App() {
           </h2>
 
           <p
-            className="text-success fs-5 mb-4"
-            style={{
-              maxWidth: '500px',
-            }}
+            className="text-success fs-5 mb-4 loading-message"
+
           >
             Reading document structure, chunking rulebook segments, and
             syncing 3072-dim vectors to Pinecone...
@@ -1182,39 +879,11 @@ function App() {
       ========================================================= */}
       {bulkLoading && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
 
-            backgroundColor:
-              'rgba(25,11,25,0.88)',
-
-            backdropFilter: 'blur(8px)',
-
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-
-            zIndex: 9999,
-
-            color: '#fff',
-            textAlign: 'center',
-
-            padding: '2rem',
-          }}
-        >
+         className="loading-overlay-bulk">
           <div
-            className="spinner-border mb-4"
-            style={{
-              width: '4rem',
-              height: '4rem',
-              borderWidth: '4px',
-              color: '#a855f7',
-            }}
+            className="spinner-border mb-4 loading-spinner-bulk"
+
             role="status"
           />
 
@@ -1223,20 +892,16 @@ function App() {
           </h2>
 
           <p
-            className="text-warning fs-5 mb-4"
-            style={{
-              maxWidth: '500px',
-            }}
+            className="text-warning fs-5 mb-4 loading-message"
+
           >
             Validating CSV rows, mapping each observation against game rules,
             and generating multiple ClickUp tickets...
           </p>
 
           <div
-            className="badge bg-dark text-light px-3 py-2"
-            style={{
-              border: '1px solid #a855f7',
-            }}
+            className="badge bg-dark text-light px-3 py-2 bulk-pipeline-badge"
+
           >
             ⚡ Automated Bulk Pipeline Running
           </div>
@@ -1252,13 +917,8 @@ function App() {
           <img
             src="/logo.png"
             alt="PS-QA Copilot"
-            className="brand-icon"
-            style={{
-              width: '32px',
-              height: '32px',
-              objectFit: 'contain',
-              display: 'block',
-            }}
+            className="brand-icon brand-logo-img"
+
           />
 
           <span className="brand-name">
@@ -1354,16 +1014,12 @@ function App() {
       <main className="main-content flex-grow-1">
 
         <section
-          className="page-hero d-flex align-items-center justify-content-between"
-          style={{
-            minHeight: '130px',
-          }}
+          className="page-hero d-flex align-items-center justify-content-between page-hero-custom"
+
         >
           <div
-            className="hero-copy"
-            style={{
-              flex: 1,
-            }}
+            className="hero-copy hero-copy-custom"
+
           >
             <h1>
               {heroCopy[activeTab].title}
@@ -1375,13 +1031,9 @@ function App() {
           </div>
 
           <div
-            className="hero-art"
+            className="hero-art hero-art-custom"
             aria-hidden="true"
-            style={{
-              fontSize: '3.5rem',
-              marginLeft: '1.5rem',
-              flexShrink: 0,
-            }}
+
           >
             {heroCopy[activeTab].art}
           </div>
@@ -1693,9 +1345,9 @@ function App() {
                       </label>
                       <div className="custom-dropdown-container position-relative" ref={featureDropdownRef}>
                         <div
-                          className={`form-control input custom-dropdown-trigger d-flex align-items-center justify-content-between ${isFeatureOpen ? 'is-open' : ''}`}
+                          className={`form-control input custom-dropdown-trigger d-flex align-items-center justify-content-between ${isFeatureOpen ? 'is-open' : ''} dropdown-trigger`}
                           onClick={() => setIsFeatureOpen(!isFeatureOpen)}
-                          style={{ cursor: 'pointer', userSelect: 'none' }}
+
                         >
                           <span className="text-truncate">
                             {selectedFeature || 'Select feature...'}
@@ -1704,23 +1356,23 @@ function App() {
                         </div>
 
                         {isFeatureOpen && (
-                          <div 
-                            className="position-absolute w-100 mt-1 shadow-lg rounded-3 p-2" 
-                            style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', zIndex: 1050 }}
+                          <div
+                            className="position-absolute w-100 mt-1 shadow-lg rounded-3 p-2 custom-feature-dropdown-menu"
+
                           >
                             <div className="mb-2 px-1">
                               <input
                                 type="text"
-                                className="form-control form-control-sm"
+                                className="form-control form-control-sm dropdown-search"
                                 placeholder="Search features..."
                                 value={featureSearch}
                                 onChange={(e) => setFeatureSearch(e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                style={{ backgroundColor: '#f8fafc', color: '#1e293b', border: '1px solid #cbd5e1' }}
+
                                 autoFocus
                               />
                             </div>
-                            <div className="custom-dropdown-list-scroll" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                            <div className="custom-dropdown-list-scroll" >
                               {featureOptions.length === 0 ? (
                                 <div className="p-2 text-muted text-center small">No features available</div>
                               ) : (
@@ -1736,22 +1388,12 @@ function App() {
                                     return (
                                       <div
                                         key={opt}
-                                        className={`px-3 py-2 rounded-2 d-flex align-items-center justify-content-between`}
+                                        className={`px-3 py-2 rounded-2 d-flex align-items-center justify-content-between custom-dropdown-option ${isSelected ? 'selected' : ''}`}
                                         onClick={() => {
                                           setSelectedFeature(opt);
                                           setIsFeatureOpen(false);
                                           setFeatureSearch('');
-                                        }}
-                                        style={{ 
-                                          cursor: 'pointer', 
-                                          fontSize: '0.88rem', 
-                                          backgroundColor: isSelected ? '#e2e8f0' : '#ffffff', 
-                                          color: '#1e293b',
-                                          fontWeight: isSelected ? '600' : 'normal'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e2e8f0' : '#ffffff'}
-                                      >
+                                        }}                                      >
                                         <span className="text-truncate">{opt}</span>
                                         {isSelected && <span className="ms-2 text-success fw-bold">✓</span>}
                                       </div>
@@ -1866,10 +1508,8 @@ function App() {
             </h2>
 
             <p
-              className="panel-intro mx-auto"
-              style={{
-                maxWidth: '640px',
-              }}
+              className="panel-intro mx-auto kb-intro"
+
             >
               Upload new game rulebooks or updated feature specs (PDF or TXT).
               The system will automatically chunk, embed, and index them into
@@ -2001,7 +1641,7 @@ function App() {
 
         {/* =====================================================
             BULK IMPORTER
-        ===================================================== */}
+        ================================================     */}
         {activeTab === 'bulk' && (
           <>
 
@@ -2105,7 +1745,7 @@ function App() {
                       Priority
                     </span>{' '}
 
-                    columns. Need a template? Check out the <span style={{ color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setActiveTab('templates')}>Templates</span> section.
+                    columns. Need a template? Check out the <span  onClick={() => setActiveTab('templates')} className="templates-link">Templates</span> section.
 
                   </p>
 
@@ -2207,9 +1847,9 @@ function App() {
                       </label>
                       <div className="custom-dropdown-container position-relative" ref={bulkFeatureDropdownRef}>
                         <div
-                          className={`form-control input custom-dropdown-trigger d-flex align-items-center justify-content-between ${isBulkFeatureOpen ? 'is-open' : ''}`}
+                          className={`form-control input custom-dropdown-trigger d-flex align-items-center justify-content-between ${isBulkFeatureOpen ? 'is-open' : ''} dropdown-trigger`}
                           onClick={() => setIsBulkFeatureOpen(!isBulkFeatureOpen)}
-                          style={{ cursor: 'pointer', userSelect: 'none' }}
+
                         >
                           <span className="text-truncate">
                             {bulkSelectedFeature || 'Select feature...'}
@@ -2218,23 +1858,23 @@ function App() {
                         </div>
 
                         {isBulkFeatureOpen && (
-                          <div 
-                            className="position-absolute w-100 mt-1 shadow-lg rounded-3 p-2" 
-                            style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', zIndex: 1050 }}
+                          <div
+                            className="position-absolute w-100 mt-1 shadow-lg rounded-3 p-2 custom-feature-dropdown-menu"
+
                           >
                             <div className="mb-2 px-1">
                               <input
                                 type="text"
-                                className="form-control form-control-sm"
+                                className="form-control form-control-sm dropdown-search"
                                 placeholder="Search features..."
                                 value={bulkFeatureSearch}
                                 onChange={(e) => setBulkFeatureSearch(e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                style={{ backgroundColor: '#f8fafc', color: '#1e293b', border: '1px solid #cbd5e1' }}
+
                                 autoFocus
                               />
                             </div>
-                            <div className="custom-dropdown-list-scroll" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                            <div className="custom-dropdown-list-scroll" >
                               {bulkFeatureOptions.length === 0 ? (
                                 <div className="p-2 text-muted text-center small">No features available</div>
                               ) : (
@@ -2250,22 +1890,12 @@ function App() {
                                     return (
                                       <div
                                         key={opt}
-                                        className={`px-3 py-2 rounded-2 d-flex align-items-center justify-content-between`}
+                                        className={`px-3 py-2 rounded-2 d-flex align-items-center justify-content-between custom-dropdown-option ${isSelected ? 'selected' : ''}`}
                                         onClick={() => {
                                           setBulkSelectedFeature(opt);
                                           setIsBulkFeatureOpen(false);
                                           setBulkFeatureSearch('');
-                                        }}
-                                        style={{ 
-                                          cursor: 'pointer', 
-                                          fontSize: '0.88rem', 
-                                          backgroundColor: isSelected ? '#e2e8f0' : '#ffffff', 
-                                          color: '#1e293b',
-                                          fontWeight: isSelected ? '600' : 'normal'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e2e8f0' : '#ffffff'}
-                                      >
+                                        }}                                      >
                                         <span className="text-truncate">{opt}</span>
                                         {isSelected && <span className="ms-2 text-success fw-bold">✓</span>}
                                       </div>
@@ -2449,19 +2079,19 @@ function App() {
             {/* Top Metric Cards */}
             <div className="row g-3 mb-4">
               <div className="col-md-4">
-                <div className="p-4 text-center rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #131d31 0%, #1a103c 100%)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
                   <div className="fs-2 fw-bold text-info">{allTickets.length}</div>
                   <div className="text-light fs-6 fw-semibold mt-1">Total Tickets Logged</div>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="p-4 text-center rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #131d31 0%, #1a103c 100%)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
                   <div className="fs-2 fw-bold text-success">{allTickets.filter(t => t.bug_type === 'prod').length}</div>
                   <div className="text-light fs-6 fw-semibold mt-1">Prod Bugs</div>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="p-4 text-center rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #131d31 0%, #1a103c 100%)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
                   <div className="fs-2 fw-bold text-warning">{users.length}</div>
                   <div className="text-light fs-6 fw-semibold mt-1">Active QA Profiles</div>
                 </div>
@@ -2472,10 +2102,10 @@ function App() {
             <h4 className="fs-6 fw-bold mb-3 text-info">🎯 Bug Reports by Priority Type (All Users):</h4>
             <div className="row g-3 mb-4">
               {['P0', 'P1', 'P2', 'P3', 'P4', 'P5'].map((pLevel) => {
-                const count = allTickets.filter(t => t.priority === pLevel).length;
+                const count = allTickets.filter(t => t.priority && t.priority.toString().toUpperCase() === pLevel).length;
                 return (
                   <div className="col-md-2 col-4" key={pLevel}>
-                    <div className="p-3 text-center rounded-3" style={{ background: '#131d31', border: '1px solid #22304a' }}>
+                    <div className="p-3 text-center rounded-3 dashboard-summary-card" >
                       <div className="fs-4 fw-bold text-light">{count}</div>
                       <div className="badge bg-secondary mt-1">{pLevel}</div>
                     </div>
@@ -2490,22 +2120,22 @@ function App() {
             ) : (
               <div className="table-responsive rounded border border-secondary">
                 <table className="table table-dark table-sm table-hover mb-0 align-middle">
-                  <thead style={{ background: '#1e293b' }}>
+                  <thead  className="dashboard-table-head">
                     <tr>
                       <th className="p-3">Summary</th>
-                      <th className="p-3" style={{ width: '100px' }}>Priority</th>
-                      <th className="p-3" style={{ width: '140px' }}>Created By</th>
-                      <th className="p-3" style={{ width: '150px' }}>Timestamp</th>
-                      <th className="p-3" style={{ width: '100px' }}>Action</th>
+                      <th className="p-3 col-priority" >Priority</th>
+                      <th className="p-3 col-created-by" >Created By</th>
+                      <th className="p-3 col-timestamp" >Timestamp</th>
+                      <th className="p-3 col-action" >Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {allTickets.slice(0, 10).map((t, idx) => (
                       <tr key={idx}>
-                        <td className="p-3 text-light text-truncate" style={{ maxWidth: '300px' }}>{t.summary}</td>
-                        <td className="p-3"><span className={`badge ${['P0', 'P1'].includes(t.priority) ? 'bg-danger' : 'bg-secondary'}`}>{t.priority}</span></td>
+                        <td className="p-3 text-light text-truncate ticket-summary-cell" >{t.summary}</td>
+                        <td className="p-3"><span className={`badge ${['P0', 'P1'].includes(t.priority?.toUpperCase()) ? 'bg-danger' : 'bg-secondary'}`}>{t.priority}</span></td>
                         <td className="p-3 text-light">👤 {t.created_by}</td>
-                        <td className="p-3 text-light" style={{ fontSize: '0.85rem' }}>{t.timestamp}</td>
+                        <td className="p-3 text-light ticket-timestamp" >{t.timestamp}</td>
                         <td className="p-3">
                           {t.url ? <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-primary">Open ↗</a> : '—'}
                         </td>
@@ -2525,16 +2155,16 @@ function App() {
           <section className="panel text-center">
             <div className="kb-icon-circle mx-auto mb-3">📄</div>
             <h2 className="panel-title">Bulk Import CSV Templates</h2>
-            <p className="panel-intro mx-auto" style={{ maxWidth: '640px' }}>
+            <p className="panel-intro mx-auto templates-intro" >
               Download our official sample CSV spreadsheet to use with the Bulk Importer. It contains the exact required columns and sample rows pre-formatted for your team.
             </p>
 
-            <div className="mt-4" style={{ maxWidth: '800px', margin: '2rem auto 0' }}>
+            <div className="mt-4 templates-content" >
               <button
                 type="button"
                 onClick={handleDownloadCsvTemplate}
-                className="btn btn-grad w-100 mb-4"
-                style={{ padding: '1rem', fontWeight: 'bold' }}
+                className="btn btn-grad w-100 mb-4 template-download-btn"
+
               >
                 📥 Download Official Bulk CSV Template (.csv)
               </button>
@@ -2550,7 +2180,7 @@ function App() {
                     <thead className="table-secondary text-dark">
                       <tr>
                         <th scope="col" className="px-3 py-2 text-center">Description<br />(Column A)</th>
-                        <th scope="col" className="px-3 py-2 text-center" style={{ width: '160px' }}>Priority (Column B)</th>
+                        <th scope="col" className="px-3 py-2 text-center template-priority-col" >Priority (Column B)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2587,11 +2217,11 @@ function App() {
           <section className="panel text-center">
             <div className="kb-icon-circle mx-auto mb-3">🔑</div>
             <h2 className="panel-title">QA Profile & ClickUp Token Settings</h2>
-            <p className="panel-intro mx-auto" style={{ maxWidth: '640px' }}>
+            <p className="panel-intro mx-auto settings-intro" >
               Register your personal ClickUp API token below. We will verify your token against ClickUp, fetch your username, and ask for confirmation before saving it to the shared database.
             </p>
 
-            <form onSubmit={handleVerifyToken} className="text-start mt-4" style={{ maxWidth: '640px', margin: '0 auto' }}>
+            <form onSubmit={handleVerifyToken} className="text-start mt-4 settings-form" >
               <div className="field mb-3">
                 <label className="field-label d-flex align-items-center gap-2">
                   <span className="step-badge">1</span>
@@ -2640,12 +2270,12 @@ function App() {
             </form>
 
             {settingsMessage && (
-              <div className="alert alert-neutral mt-3 text-start" style={{ maxWidth: '640px', margin: '1rem auto 0' }}>
+              <div className="alert alert-neutral mt-3 text-start settings-alert" >
                 <p className="mb-0 fw-bold">{settingsMessage}</p>
               </div>
             )}
 
-            <div className="mt-4 text-start" style={{ maxWidth: '640px', margin: '2rem auto 0' }}>
+            <div className="mt-4 text-start settings-content" >
               <h4 className="fs-6 fw-bold mb-2">Registered Profiles in Shared Database:</h4>
               {users.length === 0 ? (
                 <p className="text-muted fs-6">No profiles registered yet.</p>

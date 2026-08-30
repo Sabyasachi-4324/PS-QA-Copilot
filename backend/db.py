@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
@@ -16,6 +17,8 @@ cipher = Fernet(ENCRYPTION_KEY.encode()) if ENCRYPTION_KEY else None
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 users_collection = db["users"]
+bugs_collection = db["bug_history"]      # Collection for tracking priority counts
+tickets_collection = db["tickets_history"] # New collection for full ticket history feed
 
 print(f"[INFO] Connected to MongoDB Database: [ {DB_NAME} ]")
 
@@ -59,3 +62,53 @@ def db_save_user(username: str, api_token: str):
         {"$set": {"api_token": token_to_save}},
         upsert=True
     )
+
+# --- BUG METRICS FUNCTIONS ---
+
+def db_log_bug_creation(username: str, priority: str):
+    """Logs a newly created bug with its priority and timestamp into MongoDB."""
+    try:
+        bugs_collection.insert_one({
+            "username": username,
+            "priority": priority.strip().lower() if priority else "normal",
+            "created_at": datetime.utcnow()
+        })
+    except Exception as e:
+        print(f"[ERROR] Failed to log bug in MongoDB: {e}")
+
+def db_get_user_bug_stats(username: str):
+    """Aggregates bug counts grouped by priority for a specific user from MongoDB."""
+    try:
+        pipeline = [
+            {"$match": {"username": username}},
+            {"$group": {"_id": "$priority", "count": {"$sum": 1}}}
+        ]
+        results = list(bugs_collection.aggregate(pipeline))
+        stats = {item["_id"].upper(): item["count"] for item in results if item["_id"]}
+        return stats
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch bug stats from MongoDB: {e}")
+        return {}
+
+# --- NEW FULL TICKET HISTORY FUNCTIONS ---
+
+def db_save_ticket(ticket_data: dict):
+    """Saves a complete ticket record (summary, priority, URL, etc.) into MongoDB."""
+    try:
+        tickets_collection.insert_one(ticket_data)
+    except Exception as e:
+        print(f"[ERROR] Failed to save ticket history in MongoDB: {e}")
+
+def db_get_tickets():
+    """Retrieves all stored ticket records from MongoDB, newest first."""
+    try:
+        cursor = tickets_collection.find().sort("_id", -1)
+        tickets = []
+        for doc in cursor:
+            # Convert MongoDB ObjectId to string for JSON serialization compatibility
+            doc["_id"] = str(doc["_id"])
+            tickets.append(doc)
+        return tickets
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch tickets from MongoDB: {e}")
+        return []

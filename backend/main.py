@@ -28,19 +28,29 @@ from clickup_client import (
 )
 from knowledge_base import ingest_single_document
 
-# Import MongoDB user storage helpers
-from db import db_load_users, db_save_user
+# Import MongoDB storage helpers (including ticket history functions)
+from db import (
+    db_load_users, 
+    db_save_user, 
+    db_log_bug_creation, 
+    db_get_user_bug_stats,
+    db_save_ticket,
+    db_get_tickets
+)
 
 load_dotenv()
 
-TICKET_DB_FILE = os.getenv("TICKET_DB_FILE", "tickets_db.json")
 FASTAPI_TITLE = os.getenv("FASTAPI_TITLE", "PS QA Copilot API")
 
 app = FastAPI(title=FASTAPI_TITLE)
 
+# Load allowed origins from environment variable, default to local Vite dev server
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,21 +70,16 @@ def save_users(users_dict):
         db_save_user(username, token)
 
 def load_tickets():
-    """Loads created ticket history from persistent JSON storage."""
-    if os.path.exists(TICKET_DB_FILE):
-        try:
-            with open(TICKET_DB_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    """Loads created ticket history from MongoDB storage."""
+    try:
+        return db_get_tickets()
+    except Exception as e:
+        print(f"Error loading tickets from MongoDB: {e}")
+        return []
 
 def save_ticket(ticket_data):
-    """Saves a new ticket record to history."""
-    tickets = load_tickets()
-    tickets.insert(0, ticket_data)  # newest first
-    with open(TICKET_DB_FILE, "w") as f:
-        json.dump(tickets, f, indent=4)
+    """Saves a new ticket record to MongoDB storage."""
+    db_save_ticket(ticket_data)
 
 def format_markdown_description(bug_data: dict) -> str:
     """Formats JSON bug data into clean text WITHOUT markdown symbols and double numbers."""
@@ -141,17 +146,31 @@ async def get_users():
 
 @app.get("/api/get-tickets")
 async def get_tickets():
-    """Returns real-time AI-created ticket history and count directly from ClickUp using the 'ai-copilot' tag."""
+    """Returns AI-created ticket history and count directly from MongoDB storage."""
     try:
-        tickets = get_ai_tickets_from_clickup()
+        tickets = load_tickets()
         return {
             "status": "success",
             "total_count": len(tickets),
             "tickets": tickets
         }
     except Exception as e:
-        print(f"Error fetching live tickets from ClickUp: {e}")
+        print(f"Error fetching tickets from MongoDB: {e}")
         return {"status": "error", "total_count": 0, "tickets": []}
+
+@app.get("/api/get-bug-stats")
+async def get_bug_stats(username: str):
+    """Fetches permanent bug creation statistics grouped by priority from MongoDB."""
+    try:
+        stats = db_get_user_bug_stats(username)
+        return {
+            "status": "success",
+            "username": username,
+            "stats": stats
+        }
+    except Exception as e:
+        print(f"Error fetching bug stats for {username}: {e}")
+        return {"status": "error", "username": username, "stats": {}}
 
 @app.get("/api/get-assignees")
 async def get_assignees_endpoint(bug_type: str = "prod"):
@@ -169,7 +188,6 @@ async def get_feature_options_endpoint():
     options = []
     if feature_info and "options_map" in feature_info:
         options_map = feature_info["options_map"]
-        # Filter out UUID keys so only clean option names appear in the UI dropdown
         options = [k for k, v in options_map.items() if k != v]
         
     return {"status": "success", "features": options}
@@ -260,6 +278,10 @@ async def create_clickup_ticket(
     }
     save_ticket(ticket_record)
 
+    # Log successful bug creation to MongoDB for permanent stats tracking
+    logging_user = created_by if created_by else "PS QA Team"
+    db_log_bug_creation(logging_user, priority)
+
     return {
         "status": "success",
         "ticket_url": ticket_url
@@ -303,7 +325,6 @@ async def bulk_upload_bugs(
             markdown_report = markdown_report.replace("❌ ACTUAL RESULT", "### ❌ Actual Result")
             markdown_report = markdown_report.replace("✅ EXPECTED RESULT", "### ✅ Expected Result")
             
-            # Uses form-level assignee_id and feature_val selected in the UI dropdowns
             result = create_task(
                 summary=summary,
                 description=markdown_report,
@@ -326,6 +347,10 @@ async def bulk_upload_bugs(
                 "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             }
             save_ticket(ticket_record)
+            
+            # Log each bulk bug creation to MongoDB stats
+            logging_user = created_by if created_by else "PS QA Team"
+            db_log_bug_creation(logging_user, final_priority)
             
             created_tickets.append({
                 "summary": summary,
