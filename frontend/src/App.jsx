@@ -2077,7 +2077,7 @@ function App() {
             <h2 className="panel-title mb-3">📊 QA Command Overview</h2>
 
             {/* Top Metric Cards */}
-            <div className="row g-3 mb-4">
+            <div className="row g-3 mb-4 dashboard-metrics-grid">
               <div className="col-md-4">
                 <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
                   <div className="fs-2 fw-bold text-info">{allTickets.length}</div>
@@ -2100,12 +2100,12 @@ function App() {
 
             {/* Priority Count Breakdown Grid */}
             <h4 className="fs-6 fw-bold mb-3 text-info">🎯 Bug Reports by Priority Type (All Users):</h4>
-            <div className="row g-3 mb-4">
+            <div className="row g-3 mb-4 dashboard-priority-grid">
               {['P0', 'P1', 'P2', 'P3', 'P4', 'P5'].map((pLevel) => {
                 const count = allTickets.filter(t => t.priority && t.priority.toString().toUpperCase() === pLevel).length;
                 return (
                   <div className="col-md-2 col-4" key={pLevel}>
-                    <div className="p-3 text-center rounded-3 dashboard-summary-card" >
+                    <div className="p-3 text-center rounded-3 dashboard-summary-card priority-summary-card" >
                       <div className="fs-4 fw-bold text-light">{count}</div>
                       <div className="badge bg-secondary mt-1">{pLevel}</div>
                     </div>
@@ -2118,8 +2118,8 @@ function App() {
             {allTickets.length === 0 ? (
               <p className="text-muted">No tickets created yet. Start generating bugs from the Bug Ticket Generator!</p>
             ) : (
-              <div className="table-responsive rounded border border-secondary">
-                <table className="table table-dark table-sm table-hover mb-0 align-middle">
+              <div className="table-responsive rounded border border-secondary dashboard-activity-table-wrap">
+                <table className="table table-dark table-sm table-hover mb-0 align-middle dashboard-table">
                   <thead  className="dashboard-table-head">
                     <tr>
                       <th className="p-3">Summary</th>
@@ -2169,14 +2169,14 @@ function App() {
                 📥 Download Official Bulk CSV Template (.csv)
               </button>
 
-              <div className="card bg-dark text-light border-secondary p-4 text-start shadow">
+              <div className="card bg-dark text-light border-secondary p-4 text-start shadow template-preview-card">
                 <h4 className="fs-6 fw-bold mb-3 text-info d-flex align-items-center gap-2">
                   <span>📊</span> Expected Spreadsheet Format (Sheet Preview):
                 </h4>
                 <p className="text-muted fs-6 mb-3">Your spreadsheet editor (Excel / Google Sheets) should look like this:</p>
 
                 <div className="table-responsive rounded border border-secondary">
-                  <table className="table table-dark table-sm table-hover table-bordered border-secondary mb-0 align-middle">
+                  <table className="table table-dark table-sm table-hover table-bordered border-secondary mb-0 align-middle template-preview-table">
                     <thead className="table-secondary text-dark">
                       <tr>
                         <th scope="col" className="px-3 py-2 text-center">Description<br />(Column A)</th>
@@ -2280,9 +2280,9 @@ function App() {
               {users.length === 0 ? (
                 <p className="text-muted fs-6">No profiles registered yet.</p>
               ) : (
-                <ul className="list-group">
+                <ul className="list-group settings-profiles-list">
                   {users.map((u) => (
-                    <li key={u} className="list-group-item bg-dark text-light border-secondary d-flex justify-content-between align-items-center">
+                    <li key={u} className="list-group-item bg-dark text-light border-secondary d-flex justify-content-between align-items-center settings-profile-item">
                       <span>👤 {u}</span>
                       {createdBy === u && <span className="badge bg-primary">Active Profile</span>}
                     </li>
