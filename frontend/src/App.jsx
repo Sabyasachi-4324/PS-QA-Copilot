@@ -42,6 +42,31 @@ function App() {
   // Ticket History State for Dashboard
   const [allTickets, setAllTickets] = useState([]);
 
+  // Dashboard profile drill-down state
+  const [selectedDashboardProfile, setSelectedDashboardProfile] = useState(null);
+  const [dashboardProfileLoadCount, setDashboardProfileLoadCount] = useState(10);
+
+  // =========================================================
+  // FETCH DASHBOARD TICKETS
+  // =========================================================
+  // Reusable ticket refresh used on initial load and after ticket creation.
+  // Updating allTickets automatically refreshes dashboard metrics/activity.
+  const fetchTickets = async () => {
+    try {
+      const ticketRes = await axios.get(`${API_URL}/api/get-tickets`);
+
+      if (ticketRes.data.status === 'success') {
+        setAllTickets(ticketRes.data.tickets);
+        return true;
+      }
+
+      return false;
+    } catch (err) {
+      console.error('Failed to fetch dashboard tickets', err);
+      return false;
+    }
+  };
+
   // Preload all initial data (users, tickets, assignees, and features) on website startup
   useEffect(() => {
     const fetchAllStartupData = async () => {
@@ -60,10 +85,7 @@ function App() {
           }
         }
 
-        const ticketRes = await axios.get(`${API_URL}/api/get-tickets`);
-        if (ticketRes.data.status === 'success') {
-          setAllTickets(ticketRes.data.tickets);
-        }
+        await fetchTickets();
 
         // 2. Preload Default (Prod) Assignees
         const assigneeRes = await axios.get(`${API_URL}/api/get-assignees?bug_type=prod`);
@@ -2079,19 +2101,21 @@ function App() {
             {/* Top Metric Cards */}
             <div className="row g-3 mb-4 dashboard-metrics-grid">
               <div className="col-md-4">
-                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
+                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card">
                   <div className="fs-2 fw-bold text-info">{allTickets.length}</div>
                   <div className="text-light fs-6 fw-semibold mt-1">Total Tickets Logged</div>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
-                  <div className="fs-2 fw-bold text-success">{allTickets.filter(t => t.bug_type === 'prod').length}</div>
+                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card">
+                  <div className="fs-2 fw-bold text-success">
+                    {allTickets.filter(t => t.bug_type?.toString().toLowerCase() === 'prod').length}
+                  </div>
                   <div className="text-light fs-6 fw-semibold mt-1">Prod Bugs</div>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card" >
+                <div className="p-4 text-center rounded-3 shadow-sm dashboard-stat-card">
                   <div className="fs-2 fw-bold text-warning">{users.length}</div>
                   <div className="text-light fs-6 fw-semibold mt-1">Active QA Profiles</div>
                 </div>
@@ -2102,10 +2126,13 @@ function App() {
             <h4 className="fs-6 fw-bold mb-3 text-info">🎯 Bug Reports by Priority Type (All Users):</h4>
             <div className="row g-3 mb-4 dashboard-priority-grid">
               {['P0', 'P1', 'P2', 'P3', 'P4', 'P5'].map((pLevel) => {
-                const count = allTickets.filter(t => t.priority && t.priority.toString().toUpperCase() === pLevel).length;
+                const count = allTickets.filter(
+                  t => t.priority && t.priority.toString().toUpperCase() === pLevel
+                ).length;
+
                 return (
                   <div className="col-md-2 col-4" key={pLevel}>
-                    <div className="p-3 text-center rounded-3 dashboard-summary-card priority-summary-card" >
+                    <div className="p-3 text-center rounded-3 dashboard-summary-card priority-summary-card">
                       <div className="fs-4 fw-bold text-light">{count}</div>
                       <div className="badge bg-secondary mt-1">{pLevel}</div>
                     </div>
@@ -2114,37 +2141,237 @@ function App() {
               })}
             </div>
 
-            <h4 className="fs-6 fw-bold mb-3 text-info">🕒 Recent Team Activity Feed:</h4>
-            {allTickets.length === 0 ? (
-              <p className="text-muted">No tickets created yet. Start generating bugs from the Bug Ticket Generator!</p>
-            ) : (
-              <div className="table-responsive rounded border border-secondary dashboard-activity-table-wrap">
-                <table className="table table-dark table-sm table-hover mb-0 align-middle dashboard-table">
-                  <thead  className="dashboard-table-head">
-                    <tr>
-                      <th className="p-3">Summary</th>
-                      <th className="p-3 col-priority" >Priority</th>
-                      <th className="p-3 col-created-by" >Created By</th>
-                      <th className="p-3 col-timestamp" >Timestamp</th>
-                      <th className="p-3 col-action" >Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allTickets.slice(0, 10).map((t, idx) => (
-                      <tr key={idx}>
-                        <td className="p-3 text-light text-truncate ticket-summary-cell" >{t.summary}</td>
-                        <td className="p-3"><span className={`badge ${['P0', 'P1'].includes(t.priority?.toUpperCase()) ? 'bg-danger' : 'bg-secondary'}`}>{t.priority}</span></td>
-                        <td className="p-3 text-light">👤 {t.created_by}</td>
-                        <td className="p-3 text-light ticket-timestamp" >{t.timestamp}</td>
-                        <td className="p-3">
-                          {t.url ? <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-primary">Open ↗</a> : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {(() => {
+              // Build profile statistics from the tickets already loaded in allTickets.
+              // Users with zero tickets are also shown so every registered QA profile is visible.
+              const profileNames = Array.from(
+                new Set([
+                  ...users,
+                  ...allTickets.map(t => t.created_by).filter(Boolean),
+                ])
+              );
+
+              const profileStats = profileNames.map((profileName) => {
+                const profileTickets = allTickets.filter(
+                  t => (t.created_by || '').toString().trim().toLowerCase() ===
+                    profileName.toString().trim().toLowerCase()
+                );
+
+                return {
+                  name: profileName,
+                  total: profileTickets.length,
+                  prod: profileTickets.filter(
+                    t => t.bug_type?.toString().toLowerCase() === 'prod'
+                  ).length,
+                  feature: profileTickets.filter(
+                    t => t.bug_type?.toString().toLowerCase() === 'feature'
+                  ).length,
+                };
+              });
+
+              const selectedProfileTickets = selectedDashboardProfile
+                ? allTickets.filter(
+                    t => (t.created_by || '').toString().trim().toLowerCase() ===
+                      selectedDashboardProfile.toString().trim().toLowerCase()
+                  )
+                : [];
+
+              const visibleProfileTickets = selectedProfileTickets.slice(
+                0,
+                dashboardProfileLoadCount
+              );
+
+              if (selectedDashboardProfile) {
+                return (
+                  <>
+                    {/* Profile Detail View */}
+                    <div className="dashboard-profile-detail-header mb-3">
+                      <button
+                        type="button"
+                        className="btn btn-outline-info btn-sm dashboard-back-button"
+                        onClick={() => {
+                          setSelectedDashboardProfile(null);
+                          setDashboardProfileLoadCount(10);
+                        }}
+                      >
+                        ← Back to Profiles
+                      </button>
+
+                      <div className="dashboard-profile-detail-title">
+                        <h4 className="fs-6 fw-bold mb-1 text-info">
+                          👤 {selectedDashboardProfile}
+                        </h4>
+                        <p className="text-muted mb-0">
+                          Showing {Math.min(dashboardProfileLoadCount, selectedProfileTickets.length)} of {selectedProfileTickets.length} bugs
+                        </p>
+                      </div>
+
+                      <div className="dashboard-profile-detail-spacer" aria-hidden="true" />
+                    </div>
+
+                    {/* Selected Profile Metrics */}
+                    <div className="row g-3 mb-4 dashboard-profile-metrics">
+                      <div className="col-md-4">
+                        <div className="p-3 text-center rounded-3 dashboard-summary-card dashboard-profile-metric-card">
+                          <div className="fs-4 fw-bold text-primary">{selectedProfileTickets.length}</div>
+                          <div className="dashboard-profile-metric-label">Total Bugs</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <div className="p-3 text-center rounded-3 dashboard-summary-card dashboard-profile-metric-card">
+                          <div className="fs-4 fw-bold text-success">
+                            {selectedProfileTickets.filter(t => t.bug_type?.toString().toLowerCase() === 'prod').length}
+                          </div>
+                          <div className="dashboard-profile-metric-label">Prod Bugs</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <div className="p-3 text-center rounded-3 dashboard-summary-card dashboard-profile-metric-card">
+                          <div className="fs-4 fw-bold text-warning">
+                            {selectedProfileTickets.filter(t => t.bug_type?.toString().toLowerCase() === 'feature').length}
+                          </div>
+                          <div className="dashboard-profile-metric-label">Feature Bugs</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedProfileTickets.length === 0 ? (
+                      <p className="text-muted">
+                        No bugs have been logged by this profile yet.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="table-responsive rounded border border-secondary dashboard-activity-table-wrap">
+                          <table className="table table-dark table-sm table-hover mb-0 align-middle dashboard-table">
+                            <thead className="dashboard-table-head">
+                              <tr>
+                                <th className="p-3">Summary</th>
+                                <th className="p-3 col-priority">Priority</th>
+                                <th className="p-3">Type</th>
+                                <th className="p-3 col-timestamp">Timestamp</th>
+                                <th className="p-3 col-action">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {visibleProfileTickets.map((t, idx) => (
+                                <tr key={t.id || t.ticket_id || `${t.timestamp}-${idx}`}>
+                                  <td className="p-3 text-light text-truncate ticket-summary-cell">
+                                    {t.summary}
+                                  </td>
+                                  <td className="p-3">
+                                    <span
+                                      className={`badge ${['P0', 'P1'].includes(t.priority?.toUpperCase()) ? 'bg-danger' : 'bg-secondary'}`}
+                                    >
+                                      {t.priority || '—'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
+                                    <span className="badge bg-secondary">
+                                      {t.bug_type === 'feature' ? 'Feature' : 'Prod'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-light ticket-timestamp">
+                                    {t.timestamp}
+                                  </td>
+                                  <td className="p-3">
+                                    {t.url ? (
+                                      <a
+                                        href={t.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn btn-sm btn-outline-primary"
+                                      >
+                                        Open ↗
+                                      </a>
+                                    ) : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {dashboardProfileLoadCount < selectedProfileTickets.length && (
+                          <div className="text-center mt-3">
+                            <button
+                              type="button"
+                              className="btn btn-outline-info px-4"
+                              onClick={() =>
+                                setDashboardProfileLoadCount(prev => prev + 10)
+                              }
+                            >
+                              Load More ({selectedProfileTickets.length - dashboardProfileLoadCount} remaining)
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  {/* Profile Summary */}
+                  <div className="dashboard-profile-summary-header mb-4">
+                    <h4 className="fs-6 fw-bold mb-1 text-info">👥 Bugs by QA Profile</h4>
+                    <p className="text-muted mb-0">
+                      Select a profile to view its complete bug list.
+                    </p>
+                  </div>
+
+                  {profileStats.length === 0 ? (
+                    <p className="text-muted">
+                      No QA profiles or tickets are available yet.
+                    </p>
+                  ) : (
+                    <div className="row g-3">
+                      {profileStats.map((profile) => (
+                        <div className="col-md-6 col-xl-4" key={profile.name}>
+                          <button
+                            type="button"
+                            className="w-100 text-start p-4 rounded-3 dashboard-summary-card dashboard-profile-card border"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              setSelectedDashboardProfile(profile.name);
+                              setDashboardProfileLoadCount(10);
+                            }}
+                          >
+                            <div className="d-flex justify-content-between align-items-center mb-3">
+                              <div className="fw-bold text-info dashboard-profile-name">
+                                👤 {profile.name}
+                              </div>
+                              <span className="badge bg-secondary">
+                                {profile.total} Total
+                              </span>
+                            </div>
+
+                            <div className="row g-2">
+                              <div className="col-6">
+                                <div className="p-2 rounded border border-secondary text-center dashboard-profile-type-card">
+                                  <div className="fs-5 fw-bold text-success">{profile.prod}</div>
+                                  <small className="dashboard-profile-type-label">Prod Bugs</small>
+                                </div>
+                              </div>
+                              <div className="col-6">
+                                <div className="p-2 rounded border border-secondary text-center dashboard-profile-type-card">
+                                  <div className="fs-5 fw-bold text-warning">{profile.feature}</div>
+                                  <small className="dashboard-profile-type-label">Feature Bugs</small>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-info small fw-semibold mt-3">
+                              View Bugs →
+                            </div>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </section>
         )}
 
