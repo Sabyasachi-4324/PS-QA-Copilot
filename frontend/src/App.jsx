@@ -5,6 +5,29 @@ import './App.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// Local browser preferences. These are intentionally separate from MongoDB data.
+// They remember only the last successfully used dropdown selections for each flow.
+const NORMAL_BUG_PREFERENCES_KEY = 'ps_qa_last_successful_bug_preferences';
+const BULK_PREFERENCES_KEY = 'ps_qa_last_successful_bulk_preferences';
+
+const readLocalPreferences = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    console.error(`Failed to read local preferences: ${key}`, err);
+    return null;
+  }
+};
+
+const writeLocalPreferences = (key, preferences) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(preferences));
+  } catch (err) {
+    console.error(`Failed to save local preferences: ${key}`, err);
+  }
+};
+
 function App() {
   // =========================================================
   // WELCOME MODAL
@@ -82,6 +105,18 @@ function App() {
             setCreatedBy(savedUser);
           } else if (fetchedUsers.length > 0) {
             setCreatedBy(fetchedUsers[0]);
+          }
+
+          const savedBulkPreferences = readLocalPreferences(BULK_PREFERENCES_KEY);
+          if (
+            savedBulkPreferences?.createdBy &&
+            fetchedUsers.includes(savedBulkPreferences.createdBy)
+          ) {
+            setBulkCreatedBy(savedBulkPreferences.createdBy);
+          } else if (savedUser && fetchedUsers.includes(savedUser)) {
+            setBulkCreatedBy(savedUser);
+          } else if (fetchedUsers.length > 0) {
+            setBulkCreatedBy(fetchedUsers[0]);
           }
         }
 
@@ -303,11 +338,24 @@ function App() {
   // BULK UPLOAD STATE
   // =========================================================
   const [bulkFile, setBulkFile] = useState(null);
-  const [bulkBugType, setBulkBugType] = useState('prod');
+  const [bulkBugType, setBulkBugType] = useState(() => {
+    const saved = readLocalPreferences(BULK_PREFERENCES_KEY);
+    return saved?.bugType || 'prod';
+  });
+  const [bulkCreatedBy, setBulkCreatedBy] = useState(() => {
+    const saved = readLocalPreferences(BULK_PREFERENCES_KEY);
+    return saved?.createdBy || '';
+  });
   const [bulkAssignees, setBulkAssignees] = useState([]);
-  const [bulkSelectedAssignee, setBulkSelectedAssignee] = useState('');
+  const [bulkSelectedAssignee, setBulkSelectedAssignee] = useState(() => {
+    const saved = readLocalPreferences(BULK_PREFERENCES_KEY);
+    return saved?.selectedAssignee || '';
+  });
   const [bulkFeatureOptions, setBulkFeatureOptions] = useState([]);
-  const [bulkSelectedFeature, setBulkSelectedFeature] = useState('');
+  const [bulkSelectedFeature, setBulkSelectedFeature] = useState(() => {
+    const saved = readLocalPreferences(BULK_PREFERENCES_KEY);
+    return saved?.selectedFeature || '';
+  });
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResults, setBulkResults] = useState(null);
 
@@ -334,19 +382,47 @@ function App() {
       try {
         const assigneeRes = await axios.get(`${API_URL}/api/get-assignees?bug_type=${bulkBugType}`);
         if (assigneeRes.data.status === 'success') {
-          setBulkAssignees(assigneeRes.data.assignees);
-          if (assigneeRes.data.assignees.length > 0) {
-            setBulkSelectedAssignee(assigneeRes.data.assignees[0].id);
-          }
+          const fetchedBulkAssignees = assigneeRes.data.assignees;
+          setBulkAssignees(fetchedBulkAssignees);
+
+          setBulkSelectedAssignee((currentValue) => {
+            const saved = readLocalPreferences(BULK_PREFERENCES_KEY);
+            const savedValue =
+              saved?.bugType === bulkBugType ? saved?.selectedAssignee : '';
+
+            if (savedValue && fetchedBulkAssignees.some((a) => String(a.id) === String(savedValue))) {
+              return savedValue;
+            }
+
+            if (currentValue && fetchedBulkAssignees.some((a) => String(a.id) === String(currentValue))) {
+              return currentValue;
+            }
+
+            return fetchedBulkAssignees.length > 0 ? fetchedBulkAssignees[0].id : '';
+          });
         }
 
         if (bulkBugType === 'feature') {
           const featureRes = await axios.get(`${API_URL}/api/get-feature-options`);
           if (featureRes.data.status === 'success') {
-            setBulkFeatureOptions(featureRes.data.features);
-            if (featureRes.data.features.length > 0) {
-              setBulkSelectedFeature(featureRes.data.features[0]);
-            }
+            const fetchedBulkFeatures = featureRes.data.features;
+            setBulkFeatureOptions(fetchedBulkFeatures);
+
+            setBulkSelectedFeature((currentValue) => {
+              const saved = readLocalPreferences(BULK_PREFERENCES_KEY);
+              const savedValue =
+                saved?.bugType === bulkBugType ? saved?.selectedFeature : '';
+
+              if (savedValue && fetchedBulkFeatures.includes(savedValue)) {
+                return savedValue;
+              }
+
+              if (currentValue && fetchedBulkFeatures.includes(currentValue)) {
+                return currentValue;
+              }
+
+              return fetchedBulkFeatures.length > 0 ? fetchedBulkFeatures[0] : '';
+            });
           }
         } else {
           setBulkFeatureOptions([]);
@@ -381,7 +457,26 @@ function App() {
     setSummary('');
     setPriority('');
     setReproRate('');
-    setBugType('prod');
+
+    // Restore the last successful Normal Bug Generator selections only when
+    // the user starts generating a new bug. Priority and repro rate are AI-generated.
+    const savedNormalPreferences = readLocalPreferences(NORMAL_BUG_PREFERENCES_KEY);
+    if (savedNormalPreferences) {
+      if (savedNormalPreferences.bugType === 'prod' || savedNormalPreferences.bugType === 'feature') {
+        setBugType(savedNormalPreferences.bugType);
+      } else {
+        setBugType('prod');
+      }
+
+      if (savedNormalPreferences.createdBy) {
+        setCreatedBy(savedNormalPreferences.createdBy);
+      }
+
+      setSelectedAssignee(savedNormalPreferences.selectedAssignee || '');
+      setSelectedFeature(savedNormalPreferences.selectedFeature || '');
+    } else {
+      setBugType('prod');
+    }
 
     const formData = new FormData();
 
@@ -457,6 +552,15 @@ function App() {
 
       if (response.data.status === 'success') {
         setTicketUrl(response.data.ticket_url);
+
+        // Save Normal Bug Generator preferences only after successful ticket creation.
+        // Priority and repro rate are intentionally excluded.
+        writeLocalPreferences(NORMAL_BUG_PREFERENCES_KEY, {
+          bugType,
+          createdBy,
+          selectedAssignee,
+          selectedFeature: bugType === 'feature' ? selectedFeature : '',
+        });
 
         setDescription('');
         setFile(null);
@@ -556,8 +660,8 @@ function App() {
       formData.append('feature_val', bulkSelectedFeature);
     }
 
-    if (createdBy) {
-      formData.append('created_by', createdBy);
+    if (bulkCreatedBy) {
+      formData.append('created_by', bulkCreatedBy);
     }
 
     try {
@@ -568,6 +672,15 @@ function App() {
 
       if (response.data.status === 'success') {
         setBulkResults(response.data);
+
+        // Save Bulk Importer preferences only after successful upload.
+        // This storage is intentionally separate from Normal Bug Generator preferences.
+        writeLocalPreferences(BULK_PREFERENCES_KEY, {
+          bugType: bulkBugType,
+          createdBy: bulkCreatedBy,
+          selectedAssignee: bulkSelectedAssignee,
+          selectedFeature: bulkBugType === 'feature' ? bulkSelectedFeature : '',
+        });
 
         setBulkFile(null);
 
@@ -1822,8 +1935,8 @@ function App() {
                     </label>
 
                     <select
-                      value={createdBy}
-                      onChange={(e) => handleUserChange(e.target.value)}
+                      value={bulkCreatedBy}
+                      onChange={(e) => setBulkCreatedBy(e.target.value)}
                       className="form-select input"
                     >
                       {users.length === 0 ? (
@@ -2167,6 +2280,9 @@ function App() {
                     t => t.bug_type?.toString().toLowerCase() === 'feature'
                   ).length,
                 };
+              }).sort((a, b) => {
+                if (b.total !== a.total) return b.total - a.total;
+                return a.name.toString().localeCompare(b.name.toString());
               });
 
               const selectedProfileTickets = selectedDashboardProfile
