@@ -250,12 +250,15 @@ function App() {
   // BUG GENERATOR STATE
   // =========================================================
   const [description, setDescription] = useState('');
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [summary, setSummary] = useState('');
   const [generatedReport, setGeneratedReport] = useState('');
   const [priority, setPriority] = useState('');
   const [reproRate, setReproRate] = useState('');
   const [bugType, setBugType] = useState('prod');
+
+  // Track whether AI preview has been generated to keep review options visible even if description is cleared
+  const [isGenerated, setIsGenerated] = useState(false);
 
   // Dynamic Dropdown States for Assignee and Feature
   const [assignees, setAssignees] = useState([]);
@@ -492,6 +495,7 @@ function App() {
       setGeneratedReport(response.data.generated_report);
       setPriority(response.data.priority);
       setReproRate(response.data.repro_rate);
+      setIsGenerated(true); // Keep review panel open even if description is cleared
     } catch (err) {
       console.error(err);
       setError(
@@ -535,8 +539,10 @@ function App() {
       formData.append('created_by', createdBy);
     }
 
-    if (file) {
-      formData.append('evidence', file);
+    if (files && files.length > 0) {
+      files.forEach((fileItem) => {
+        formData.append('evidence', fileItem); // FastAPI handles multiple files under the same key
+      });
     }
 
     try {
@@ -563,7 +569,7 @@ function App() {
         });
 
         setDescription('');
-        setFile(null);
+        setFiles([]);
         setSummary('');
         setGeneratedReport('');
         setPriority('');
@@ -571,6 +577,7 @@ function App() {
         setBugType('prod');
         setSelectedAssignee('');
         setSelectedFeature('');
+        setIsGenerated(false); // Reset review panel visibility
 
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -823,67 +830,67 @@ function App() {
           aria-modal="true"
           aria-labelledby="welcome-title"
 
-         className="welcome-overlay">
+          className="welcome-overlay">
           <div
 
-           className="welcome-shell">
+            className="welcome-shell">
             <div
 
-             className="welcome-content">
+              className="welcome-content">
               <div
 
-               className="welcome-glow"/>
+                className="welcome-glow" />
 
               <div
 
-               className="welcome-logo-wrap">
+                className="welcome-logo-wrap">
                 <img
                   src="/logo.png"
                   alt="PS-QA Copilot Logo"
 
-                 className="welcome-logo"/>
+                  className="welcome-logo" />
               </div>
 
               <div
 
-               className="welcome-label">
+                className="welcome-label">
                 Welcome to
               </div>
 
               <h2
                 id="welcome-title"
 
-               className="welcome-title">
+                className="welcome-title">
                 PS-QA{' '}
 
                 <span
 
-                 className="welcome-title-gradient">
+                  className="welcome-title-gradient">
                   Copilot!
                 </span>
               </h2>
 
               <div
 
-               className="welcome-divider">
+                className="welcome-divider">
                 <div
 
-                 className="welcome-divider-line-left"/>
+                  className="welcome-divider-line-left" />
 
                 <span
 
-                 className="welcome-divider-dot">
+                  className="welcome-divider-dot">
                   ◆
                 </span>
 
                 <div
 
-                 className="welcome-divider-line-right"/>
+                  className="welcome-divider-line-right" />
               </div>
 
               <p
 
-               className="welcome-description">
+                className="welcome-description">
                 Your intelligent assistant for converting raw QA observations
                 into developer-ready ClickUp tickets with RAG rulebook
                 context.
@@ -891,19 +898,19 @@ function App() {
 
               <div
 
-               className="welcome-tip">
+                className="welcome-tip">
                 <div
 
-                 className="welcome-tip-icon">
+                  className="welcome-tip-icon">
                   💡
                 </div>
 
                 <div
 
-                 className="welcome-tip-text">
+                  className="welcome-tip-text">
                   <strong
 
-                   className="welcome-tip-strong">
+                    className="welcome-tip-strong">
                     Quick Tip:
                   </strong>{' '}
                   Generate single tickets, train the AI with new rulebooks,
@@ -913,11 +920,10 @@ function App() {
 
               <button
                 type="button"
-                onClick={handleCloseWelcome}
-                className="welcome-start-btn">
+                onClick={handleCloseWelcome} className="welcome-start-btn">
                 <span
 
-                 className="welcome-start-icon">
+                  className="welcome-start-icon">
                   🚀
                 </span>
 
@@ -925,17 +931,17 @@ function App() {
 
                 <span
 
-                 className="welcome-start-arrow">
+                  className="welcome-start-arrow">
                   →
                 </span>
               </button>
 
               <div
 
-               className="welcome-security">
+                className="welcome-security">
                 <span
 
-                 className="welcome-security-icon">
+                  className="welcome-security-icon">
                   ♢
                 </span>
 
@@ -953,7 +959,7 @@ function App() {
       {loading && activeTab === 'report' && (
         <div
 
-         className="loading-overlay-report">
+          className="loading-overlay-report">
           <div
             className="spinner-border text-primary mb-4 loading-spinner-report"
 
@@ -984,7 +990,7 @@ function App() {
       {uploadLoading && (
         <div
 
-         className="loading-overlay-knowledge">
+          className="loading-overlay-knowledge">
           <div
             className="spinner-border text-info mb-4 loading-spinner-knowledge"
 
@@ -1015,7 +1021,7 @@ function App() {
       {bulkLoading && (
         <div
 
-         className="loading-overlay-bulk">
+          className="loading-overlay-bulk">
           <div
             className="spinner-border mb-4 loading-spinner-bulk"
 
@@ -1205,7 +1211,7 @@ function App() {
 
         {/* =====================================================
             BUG REPORTER
-        ===================================================== */}
+        ================================================     */}
         {activeTab === 'report' && (
           <section className="panel">
 
@@ -1270,9 +1276,10 @@ function App() {
 
                       <input
                         type="file"
+                        multiple // <--- Allows selecting multiple files
                         ref={fileInputRef}
                         onChange={(e) =>
-                          setFile(e.target.files[0])
+                          setFiles(Array.from(e.target.files)) // <--- Store array of files
                         }
                         className="dropzone-input"
                       />
@@ -1282,8 +1289,8 @@ function App() {
                       </span>
 
                       <span>
-                        {file
-                          ? file.name
+                        {files.length > 0
+                          ? files.map(f => f.name).join(', ') // Display names of selected files
                           : (
                             <>
                               Drag &amp; drop your files here
@@ -1378,7 +1385,7 @@ function App() {
               </div>
             )}
 
-            {generatedReport && (
+            {isGenerated && (
               <div className="panel panel-nested mt-4">
 
                 <h2 className="panel-title">
@@ -1630,7 +1637,7 @@ function App() {
 
         {/* =====================================================
             KNOWLEDGE BASE
-        ===================================================== */}
+        ================================================     */}
         {activeTab === 'knowledge' && (
           <section className="panel text-center">
 
@@ -1880,7 +1887,7 @@ function App() {
                       Priority
                     </span>{' '}
 
-                    columns. Need a template? Check out the <span  onClick={() => setActiveTab('templates')} className="templates-link">Templates</span> section.
+                    columns. Need a template? Check out the <span onClick={() => setActiveTab('templates')} className="templates-link">Templates</span> section.
 
                   </p>
 
@@ -2206,7 +2213,7 @@ function App() {
 
         {/* =====================================================
             DASHBOARD TAB
-        ===================================================== */}
+        ================================================     */}
         {activeTab === 'dashboard' && (
           <section className="panel">
             <h2 className="panel-title mb-3">📊 QA Command Overview</h2>
@@ -2287,9 +2294,9 @@ function App() {
 
               const selectedProfileTickets = selectedDashboardProfile
                 ? allTickets.filter(
-                    t => (t.created_by || '').toString().trim().toLowerCase() ===
-                      selectedDashboardProfile.toString().trim().toLowerCase()
-                  )
+                  t => (t.created_by || '').toString().trim().toLowerCase() ===
+                    selectedDashboardProfile.toString().trim().toLowerCase()
+                )
                 : [];
 
               const visibleProfileTickets = selectedProfileTickets.slice(
