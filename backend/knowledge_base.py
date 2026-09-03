@@ -3,6 +3,9 @@ load_dotenv()
 
 import os
 import uuid
+import httpx
+import httpcore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -46,8 +49,14 @@ embeddings = GoogleGenerativeAIEmbeddings(
 )
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((httpx.ConnectError, httpcore.ConnectError, ConnectionResetError)),
+    reraise=True
+)
 def _upsert_chunks(chunks):
-    """Embeds and upserts a list of LangChain Document chunks directly via the Pinecone SDK."""
+    """Embeds and upserts a list of LangChain Document chunks directly via the Pinecone SDK with automatic retry."""
     texts = [chunk.page_content for chunk in chunks]
     vectors_embedded = embeddings.embed_documents(texts)
 
@@ -113,8 +122,14 @@ def ingest_all_documents(docs_folder: str = "docs"):
     print("Cloud Database successfully built!")
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((httpx.ConnectError, httpcore.ConnectError, ConnectionResetError)),
+    reraise=True
+)
 def retrieve_context(query: str) -> str:
-    """Searches the Pinecone database for matching rules."""
+    """Searches the Pinecone database for matching rules with automatic retry on network drops."""
     query_vector = embeddings.embed_query(query)
 
     results = index.query(

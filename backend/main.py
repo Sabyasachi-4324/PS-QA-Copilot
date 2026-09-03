@@ -14,6 +14,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
 
 # Use relative imports for package compatibility
 from bug_generator import generate_structured_bug
@@ -225,16 +226,17 @@ async def upload_rulebook(file: UploadFile = File(...)):
 @app.post("/api/create-ticket")
 async def create_clickup_ticket(
     summary: str = Form(...),
-    report: str = Form(...),
+    report: str = Form(None),
     priority: str = Form(...),
     repro_rate: str = Form(...),
     bug_type: str = Form(...),
     assignee_id: str = Form(None),
     feature_val: str = Form(None),
     created_by: str = Form(None),
-    evidence: UploadFile = File(None)
+    evidence: List[UploadFile] = File(None)  # <--- Changed to List[UploadFile]
 ):
-    markdown_report = report.replace("⚙️ PRECONDITIONS", "### ⚙️ Preconditions")
+    safe_report = report or ""
+    markdown_report = safe_report.replace("⚙️ PRECONDITIONS", "### ⚙️ Preconditions")
     markdown_report = markdown_report.replace("👣 STEPS TO REPRODUCE", "### 👣 Steps to Reproduce")
     markdown_report = markdown_report.replace("❌ ACTUAL RESULT", "### ❌ Actual Result")
     markdown_report = markdown_report.replace("✅ EXPECTED RESULT", "### ✅ Expected Result")
@@ -258,15 +260,18 @@ async def create_clickup_ticket(
 
     ticket_url = clickup_task.get('url')
     
+    # Handle multiple file attachments sequentially
     if evidence:
         task_id = clickup_task['id']
-        file_location = f"./temp_{evidence.filename}"
-        with open(file_location, "wb+") as f:
-            f.write(await evidence.read())
-        
-        upload_attachment(task_id, file_location, api_token=user_token)
-        if os.path.exists(file_location):
-            os.remove(file_location)
+        for ev in evidence:
+            if ev and ev.filename:
+                file_location = f"./temp_{ev.filename}"
+                with open(file_location, "wb+") as f:
+                    f.write(await ev.read())
+                
+                upload_attachment(task_id, file_location, api_token=user_token)
+                if os.path.exists(file_location):
+                    os.remove(file_location)
 
     ticket_record = {
         "summary": summary,
