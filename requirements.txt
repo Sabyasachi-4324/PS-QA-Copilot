@@ -16,3 +16,4 @@ pymongo
 dnspython
 cryptography
 slowapi
+tenacity>=8.0.0
